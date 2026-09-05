@@ -2,6 +2,7 @@ package com.vidente.app
 
 import android.content.Context
 import android.content.SharedPreferences
+import java.util.UUID
 
 object VidentePreferences {
     const val PREFS_NAME = "vidente_prefs"
@@ -10,6 +11,7 @@ object VidentePreferences {
     const val KEY_VOICE_NAME = "voice_name"
     const val KEY_BACKEND_URL = "backend_url"
     const val KEY_BACKEND_ACCESS_KEY = "backend_access_key"
+    const val KEY_DEVICE_ID = "device_id"
 
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
@@ -54,5 +56,18 @@ object VidentePreferences {
 
     fun setBackendAccessKey(context: Context, key: String) {
         prefs(context).edit().putString(KEY_BACKEND_ACCESS_KEY, key.trim()).apply()
+    }
+
+    /**
+     * Random ID generated once per install (no login/email required) so the
+     * backend can track the free monthly question limit per device.
+     */
+    fun getDeviceId(context: Context): String {
+        val existing = prefs(context).getString(KEY_DEVICE_ID, null)
+        if (existing != null) return existing
+
+        val newId = UUID.randomUUID().toString()
+        prefs(context).edit().putString(KEY_DEVICE_ID, newId).apply()
+        return newId
     }
 }

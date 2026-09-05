@@ -59,6 +59,7 @@ class BackendConversationalAssistant(private val context: Context) : Conversatio
         val payload = JSONObject().apply {
             put("question", question)
             put("screenSummary", screenSummary)
+            put("deviceId", VidentePreferences.getDeviceId(context))
         }
 
         connection.outputStream.use { stream ->
@@ -68,18 +69,27 @@ class BackendConversationalAssistant(private val context: Context) : Conversatio
         val responseCode = connection.responseCode
         val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
         val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        val json = runCatching { JSONObject(body) }.getOrNull()
 
-        if (responseCode !in 200..299) {
-            Log.e(TAG, "El backend respondió $responseCode: $body")
-            return "El servidor de Vidente respondió con un error."
+        return when {
+            responseCode == HTTP_LIMIT_REACHED ->
+                json?.optString("message")?.takeIf { it.isNotBlank() }
+                    ?: "Se acabaron tus preguntas gratis de este mes."
+
+            responseCode in 200..299 ->
+                json?.optString("answer")?.takeIf { it.isNotBlank() }
+                    ?: "El servidor no envió una respuesta."
+
+            else -> {
+                Log.e(TAG, "El backend respondió $responseCode: $body")
+                "El servidor de Vidente respondió con un error."
+            }
         }
-
-        val answer = JSONObject(body).optString("answer")
-        return answer.ifBlank { "El servidor no envió una respuesta." }
     }
 
     companion object {
         private const val TAG = "BackendAssistant"
         private const val TIMEOUT_MS = 15000
+        private const val HTTP_LIMIT_REACHED = 402
     }
 }

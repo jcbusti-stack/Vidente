@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const { getUsage, incrementUsage } = require('./usageStore');
 
 const app = express();
 app.use(cors());
@@ -10,6 +11,7 @@ const PORT = process.env.PORT || 3000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
 const BACKEND_ACCESS_KEY = process.env.VIDENTE_BACKEND_KEY;
+const FREE_MONTHLY_LIMIT = parseInt(process.env.FREE_MONTHLY_LIMIT || '25', 10);
 
 if (!GEMINI_API_KEY) {
   console.error('Falta la variable de entorno GEMINI_API_KEY.');
@@ -29,17 +31,38 @@ app.post('/ask', askLimiter, async (req, res) => {
     }
   }
 
-  const { question, screenSummary } = req.body || {};
+  const { question, screenSummary, deviceId } = req.body || {};
   if (typeof question !== 'string' || !question.trim()) {
     return res.status(400).json({ error: 'Falta la pregunta (question).' });
+  }
+  if (typeof deviceId !== 'string' || !deviceId.trim()) {
+    return res.status(400).json({ error: 'Falta el identificador del dispositivo (deviceId).' });
   }
   if (!GEMINI_API_KEY) {
     return res.status(500).json({ error: 'El servidor no tiene configurada la clave de Gemini.' });
   }
 
+  const usageBefore = getUsage(deviceId);
+  if (usageBefore.count >= FREE_MONTHLY_LIMIT) {
+    return res.status(402).json({
+      error: 'limit_reached',
+      message: 'Se acabaron tus preguntas gratis de este mes. Vuelven a estar disponibles el próximo mes.',
+      limit: FREE_MONTHLY_LIMIT,
+      used: usageBefore.count
+    });
+  }
+
   try {
     const answer = await askGemini(question, typeof screenSummary === 'string' ? screenSummary : '');
-    res.json({ answer });
+    const usageAfter = incrementUsage(deviceId);
+    res.json({
+      answer,
+      usage: {
+        used: usageAfter.count,
+        limit: FREE_MONTHLY_LIMIT,
+        remaining: Math.max(FREE_MONTHLY_LIMIT - usageAfter.count, 0)
+      }
+    });
   } catch (error) {
     console.error('Error llamando a Gemini:', error);
     res.status(502).json({ error: 'No se pudo obtener respuesta de Gemini.' });
