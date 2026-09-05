@@ -2,7 +2,7 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeViewFocused|typeViewAccessibilityFocused"
     android:accessibilityFeedbackType="feedbackSpoken"
-    android:accessibilityFlags="flagDefault|flagReportViewIds|flagRequestFilterKeyEvents"
+    android:accessibilityFlags="flagDefault|flagReportViewIds|flagRequestFilterKeyEvents|flagRequestTouchExplorationMode"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
     android:isAccessibilityTool="true"
