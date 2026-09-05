@@ -49,11 +49,14 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         findViewById<Button>(R.id.buttonPreview).setOnClickListener { previewVoice() }
         findViewById<Button>(R.id.buttonReset).setOnClickListener { resetToDefaults() }
 
-        val editGeminiApiKey = findViewById<EditText>(R.id.editGeminiApiKey)
-        editGeminiApiKey.setText(VidentePreferences.getGeminiApiKey(this).orEmpty())
-        findViewById<Button>(R.id.buttonSaveGeminiKey).setOnClickListener {
-            VidentePreferences.setGeminiApiKey(this, editGeminiApiKey.text.toString())
-            Toast.makeText(this, R.string.settings_gemini_saved, Toast.LENGTH_SHORT).show()
+        val editBackendUrl = findViewById<EditText>(R.id.editBackendUrl)
+        val editBackendAccessKey = findViewById<EditText>(R.id.editBackendAccessKey)
+        editBackendUrl.setText(VidentePreferences.getBackendUrl(this).orEmpty())
+        editBackendAccessKey.setText(VidentePreferences.getBackendAccessKey(this).orEmpty())
+        findViewById<Button>(R.id.buttonSaveBackendConfig).setOnClickListener {
+            VidentePreferences.setBackendUrl(this, editBackendUrl.text.toString())
+            VidentePreferences.setBackendAccessKey(this, editBackendAccessKey.text.toString())
+            Toast.makeText(this, R.string.settings_backend_saved, Toast.LENGTH_SHORT).show()
         }
 
         tts = TextToSpeech(this, this)

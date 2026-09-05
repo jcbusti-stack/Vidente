@@ -34,7 +34,11 @@ class VidenteAccessibilityService :
 
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
-    private val assistant: ConversationalAssistant by lazy { GeminiConversationalAssistant(this) }
+    private val backendAssistant: ConversationalAssistant by lazy { BackendConversationalAssistant(this) }
+    private val unconfiguredAssistant: ConversationalAssistant by lazy { UnconfiguredConversationalAssistant() }
+
+    private fun currentAssistant(): ConversationalAssistant =
+        if (VidentePreferences.getBackendUrl(this).isNullOrBlank()) unconfiguredAssistant else backendAssistant
 
     override fun onCreate() {
         super.onCreate()
@@ -160,7 +164,7 @@ class VidenteAccessibilityService :
             }
 
             val summary = buildScreenSummary()
-            assistant.answer(question, summary) { answer -> speak(answer) }
+            currentAssistant().answer(question, summary) { answer -> speak(answer) }
         }
     }
 

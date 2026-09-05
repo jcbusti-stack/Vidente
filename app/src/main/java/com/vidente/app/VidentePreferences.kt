@@ -8,7 +8,8 @@ object VidentePreferences {
     const val KEY_RATE = "speech_rate"
     const val KEY_PITCH = "speech_pitch"
     const val KEY_VOICE_NAME = "voice_name"
-    const val KEY_GEMINI_API_KEY = "gemini_api_key"
+    const val KEY_BACKEND_URL = "backend_url"
+    const val KEY_BACKEND_ACCESS_KEY = "backend_access_key"
 
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
@@ -41,10 +42,17 @@ object VidentePreferences {
         prefs(context).edit().putString(KEY_VOICE_NAME, voiceName).apply()
     }
 
-    fun getGeminiApiKey(context: Context): String? =
-        prefs(context).getString(KEY_GEMINI_API_KEY, null)
+    fun getBackendUrl(context: Context): String? =
+        prefs(context).getString(KEY_BACKEND_URL, null)?.trimEnd('/')?.takeIf { it.isNotBlank() }
 
-    fun setGeminiApiKey(context: Context, apiKey: String) {
-        prefs(context).edit().putString(KEY_GEMINI_API_KEY, apiKey.trim()).apply()
+    fun setBackendUrl(context: Context, url: String) {
+        prefs(context).edit().putString(KEY_BACKEND_URL, url.trim().trimEnd('/')).apply()
+    }
+
+    fun getBackendAccessKey(context: Context): String? =
+        prefs(context).getString(KEY_BACKEND_ACCESS_KEY, null)
+
+    fun setBackendAccessKey(context: Context, key: String) {
+        prefs(context).edit().putString(KEY_BACKEND_ACCESS_KEY, key.trim()).apply()
     }
 }

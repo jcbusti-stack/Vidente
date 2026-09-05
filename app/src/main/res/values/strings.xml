@@ -16,10 +16,12 @@
     <string name="settings_reset_button">Restablecer valores</string>
     <string name="settings_preview_text">Así sonará Vidente al leer los elementos en pantalla.</string>
 
-    <string name="settings_gemini_label">Clave de API de Gemini (para el modo conversacional)</string>
-    <string name="settings_gemini_hint">Pega aquí tu clave de Gemini</string>
-    <string name="settings_gemini_save">Guardar clave</string>
-    <string name="settings_gemini_saved">Clave guardada</string>
+    <string name="settings_backend_url_label">Dirección del servidor de Vidente (para el modo conversacional)</string>
+    <string name="settings_backend_url_hint">Ej: https://mi-vidente.onrender.com</string>
+    <string name="settings_backend_key_label">Clave de acceso al servidor (opcional)</string>
+    <string name="settings_backend_key_hint">Solo si tu servidor la pide</string>
+    <string name="settings_backend_save">Guardar</string>
+    <string name="settings_backend_saved">Configuración guardada</string>
 
     <string name="request_mic_permission">Activar micrófono (modo conversacional)</string>
     <string name="mic_permission_granted">Permiso de micrófono concedido</string>
