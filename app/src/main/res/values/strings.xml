@@ -3,4 +3,16 @@
     <string name="accessibility_service_description">Vidente lee en voz alta el elemento que tiene el foco en pantalla.</string>
     <string name="main_instructions">Activa Vidente en Ajustes de accesibilidad para que lea en voz alta los elementos enfocados.</string>
     <string name="open_settings">Abrir ajustes de accesibilidad</string>
+    <string name="open_settings_screen">Ajustes de voz</string>
+
+    <string name="settings_title">Ajustes de voz de Vidente</string>
+    <string name="settings_rate_label">Velocidad de voz</string>
+    <string name="settings_rate_value">Velocidad: %1$.2fx</string>
+    <string name="settings_pitch_label">Tono de voz</string>
+    <string name="settings_pitch_value">Tono: %1$.2fx</string>
+    <string name="settings_voice_label">Voz del sistema</string>
+    <string name="settings_voice_auto">Voz recomendada (automática)</string>
+    <string name="settings_preview_button">Probar voz</string>
+    <string name="settings_reset_button">Restablecer valores</string>
+    <string name="settings_preview_text">Así sonará Vidente al leer los elementos en pantalla.</string>
 </resources>

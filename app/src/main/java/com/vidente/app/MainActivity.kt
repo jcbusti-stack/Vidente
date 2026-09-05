@@ -15,5 +15,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.buttonOpenSettings).setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
+
+        findViewById<Button>(R.id.buttonOpenVoiceSettings).setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
     }
 }
