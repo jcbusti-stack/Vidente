@@ -15,7 +15,24 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        // Clave de depuración fija y versionada, en vez de la que Gradle
+        // generaría al azar en cada máquina/ejecución de CI. Sin esto, cada
+        // compilación en GitHub Actions queda firmada con una clave distinta
+        // y Android rechaza instalar una versión nueva sobre la anterior
+        // ("conflicto con un paquete").
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
