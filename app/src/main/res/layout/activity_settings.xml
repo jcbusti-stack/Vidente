@@ -84,7 +84,32 @@
             android:id="@+id/buttonReset"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="32dp"
             android:text="@string/settings_reset_button" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="@string/settings_gemini_label"
+            android:textSize="16sp" />
+
+        <EditText
+            android:id="@+id/editGeminiApiKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:autofillHints="password"
+            android:contentDescription="@string/settings_gemini_label"
+            android:hint="@string/settings_gemini_hint"
+            android:inputType="textNoSuggestions"
+            android:maxLines="1" />
+
+        <Button
+            android:id="@+id/buttonSaveGeminiKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_gemini_save" />
 
     </LinearLayout>
 </ScrollView>

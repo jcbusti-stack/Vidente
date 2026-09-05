@@ -15,4 +15,19 @@
     <string name="settings_preview_button">Probar voz</string>
     <string name="settings_reset_button">Restablecer valores</string>
     <string name="settings_preview_text">Así sonará Vidente al leer los elementos en pantalla.</string>
+
+    <string name="settings_gemini_label">Clave de API de Gemini (para el modo conversacional)</string>
+    <string name="settings_gemini_hint">Pega aquí tu clave de Gemini</string>
+    <string name="settings_gemini_save">Guardar clave</string>
+    <string name="settings_gemini_saved">Clave guardada</string>
+
+    <string name="request_mic_permission">Activar micrófono (modo conversacional)</string>
+    <string name="mic_permission_granted">Permiso de micrófono concedido</string>
+    <string name="mic_permission_denied">Permiso de micrófono denegado. El modo conversacional no funcionará sin él.</string>
+
+    <string name="conversational_floating_button">Preguntar</string>
+    <string name="conversational_floating_button_description">Preguntar a Vidente sobre la pantalla actual</string>
+    <string name="conversational_need_mic_permission">Necesito permiso de micrófono. Abre la app Vidente para concederlo.</string>
+    <string name="conversational_listening">Te escucho. Pregunta sobre la pantalla.</string>
+    <string name="conversational_no_question_heard">No entendí la pregunta, inténtalo de nuevo.</string>
 </resources>

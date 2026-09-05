@@ -7,9 +7,11 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import java.util.Locale
 
@@ -46,6 +48,13 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         findViewById<Button>(R.id.buttonPreview).setOnClickListener { previewVoice() }
         findViewById<Button>(R.id.buttonReset).setOnClickListener { resetToDefaults() }
+
+        val editGeminiApiKey = findViewById<EditText>(R.id.editGeminiApiKey)
+        editGeminiApiKey.setText(VidentePreferences.getGeminiApiKey(this).orEmpty())
+        findViewById<Button>(R.id.buttonSaveGeminiKey).setOnClickListener {
+            VidentePreferences.setGeminiApiKey(this, editGeminiApiKey.text.toString())
+            Toast.makeText(this, R.string.settings_gemini_saved, Toast.LENGTH_SHORT).show()
+        }
 
         tts = TextToSpeech(this, this)
     }
