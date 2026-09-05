@@ -5,4 +5,5 @@
     android:accessibilityFlags="flagDefault|flagReportViewIds|flagRequestFilterKeyEvents"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
+    android:isAccessibilityTool="true"
     android:notificationTimeout="100" />
