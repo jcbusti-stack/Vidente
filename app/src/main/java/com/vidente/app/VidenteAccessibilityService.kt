@@ -34,15 +34,22 @@ class VidenteAccessibilityService :
     private var lastSpoken: String? = null
     private var pendingText: String? = null
 
-    private enum class TutorialStep { NONE, EXPLORE, DOUBLE_TAP, SWIPES }
+    // Aviso ("Principio/Final de la pantalla") pendiente de anteponer a la
+    // próxima lectura de elemento tras envolver en la navegación lineal (P5).
+    private var boundaryAnnouncement: String? = null
+
+    private enum class TutorialStep { NONE, EXPLORE, DOUBLE_TAP, NAVIGATE, SYSTEM }
     private var tutorialStep = TutorialStep.NONE
-    private val practicedSwipes = mutableSetOf<Int>()
+    private val practicedGestures = mutableSetOf<Int>()
     private var pendingTutorial = false
     // Solo se aceptan gestos de práctica cuando la instrucción hablada terminó,
     // para que un evento de foco al arrancar no salte el primer paso ni corte
     // la introducción.
     @Volatile private var tutorialInputEnabled = false
-    private val SWIPE_GESTURES = setOf(GESTURE_SWIPE_LEFT, GESTURE_SWIPE_UP, GESTURE_SWIPE_RIGHT)
+
+    private val NAVIGATE_GESTURES = listOf(GESTURE_SWIPE_RIGHT, GESTURE_SWIPE_LEFT)
+    private val SYSTEM_GESTURES =
+        listOf(GESTURE_SWIPE_UP, GESTURE_SWIPE_DOWN_AND_LEFT, GESTURE_SWIPE_DOWN_AND_RIGHT)
 
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
@@ -170,10 +177,18 @@ class VidenteAccessibilityService :
         val text = describeForSpeech(node)
         node.recycle()
 
-        if (text.isNullOrBlank() || text == lastSpoken) return
+        if (text.isNullOrBlank()) return
+
+        // Un aviso de borde de pantalla se antepone y salta la deduplicación,
+        // para que "Final de la pantalla" no se pierda si el elemento repite
+        // texto con el anterior.
+        val boundary = boundaryAnnouncement
+        boundaryAnnouncement = null
+        if (text == lastSpoken && boundary == null) return
 
         lastSpoken = text
-        if (ttsReady) speak(text) else pendingText = text
+        val toSpeak = if (boundary != null) "$boundary. $text" else text
+        if (ttsReady) speak(toSpeak) else pendingText = toSpeak
 
         if (tutorialStep == TutorialStep.EXPLORE) onExplorePracticed()
     }
@@ -411,27 +426,28 @@ class VidenteAccessibilityService :
         return "[$role] $label"
     }
 
-    // ---- Activación de la barra de navegación del sistema ----
+    // ---- Reparto de gestos (P5, Opción 1) ----
 
     /**
-     * Atrás/Inicio/Recientes se activan con un deslizamiento de un dedo en
-     * cualquier parte de la pantalla. Se eligieron deslizamientos direccionales
-     * porque son fáciles de hacer sin ver la pantalla, no dependen de
-     * coordenadas ni de tener el foco puesto sobre la barra del sistema, y no
-     * chocan con el doble toque, que sigue activando el elemento enfocado.
+     * Reparto de gestos de un dedo:
      *
-     *   Deslizar a la izquierda -> Atrás
-     *   Deslizar hacia arriba   -> Inicio
-     *   Deslizar a la derecha   -> Recientes
+     *   Deslizar a la derecha            -> elemento siguiente (P5)
+     *   Deslizar a la izquierda          -> elemento anterior  (P5)
+     *   Deslizar hacia arriba            -> Inicio
+     *   Deslizar abajo y luego izquierda -> Atrás
+     *   Deslizar abajo y luego derecha   -> Recientes
+     *   Deslizar hacia abajo             -> libre (reservado para P7)
      *
-     * Los botones del sistema viven en com.android.systemui y no responden al
-     * ACTION_CLICK del doble toque; la vía correcta es performGlobalAction.
+     * Siguiente/anterior van en el gesto más fácil y en el mismo sentido que
+     * en el resto de lectores de pantalla. Atrás y Recientes pasan a gestos en
+     * ángulo para dejar libres los deslizamientos horizontales.
      *
      * El doble toque (P4) activa el elemento enfocado con un ACTION_CLICK
-     * explícito sobre el ancestro clickeable más cercano, en vez de depender
-     * del toque por coordenadas de Android. GESTURE_DOUBLE_TAP solo existe
-     * desde API 30; en versiones anteriores se conserva el comportamiento por
-     * defecto del sistema.
+     * explícito sobre el ancestro clickeable más cercano. GESTURE_DOUBLE_TAP
+     * solo existe desde API 30; en versiones anteriores se conserva el
+     * comportamiento por defecto del sistema. Los botones del sistema viven en
+     * com.android.systemui y no responden a ACTION_CLICK: la vía correcta es
+     * performGlobalAction.
      */
     override fun onGesture(gestureId: Int): Boolean {
         if (tutorialStep != TutorialStep.NONE) return handleTutorialGesture(gestureId)
@@ -440,16 +456,82 @@ class VidenteAccessibilityService :
             return activateFocusedElement()
         }
 
+        when (gestureId) {
+            GESTURE_SWIPE_RIGHT -> return moveAccessibilityFocus(forward = true)
+            GESTURE_SWIPE_LEFT -> return moveAccessibilityFocus(forward = false)
+        }
+
         val (action, spoken) = when (gestureId) {
-            GESTURE_SWIPE_LEFT -> GLOBAL_ACTION_BACK to "Atrás"
             GESTURE_SWIPE_UP -> GLOBAL_ACTION_HOME to "Inicio"
-            GESTURE_SWIPE_RIGHT -> GLOBAL_ACTION_RECENTS to "Recientes"
+            GESTURE_SWIPE_DOWN_AND_LEFT -> GLOBAL_ACTION_BACK to "Atrás"
+            GESTURE_SWIPE_DOWN_AND_RIGHT -> GLOBAL_ACTION_RECENTS to "Recientes"
             else -> return false
         }
 
         val done = performGlobalAction(action)
         if (done && ttsReady) speak(spoken)
         return done
+    }
+
+    /**
+     * Mueve el foco de accesibilidad al siguiente o anterior elemento
+     * navegable de la ventana activa con ACTION_ACCESSIBILITY_FOCUS. El
+     * elemento se anuncia por el evento TYPE_VIEW_ACCESSIBILITY_FOCUSED que
+     * dispara la acción. Al pasar del último al primero, o al revés, deja
+     * pendiente un aviso de borde de pantalla.
+     */
+    private fun moveAccessibilityFocus(forward: Boolean): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val nodes = collectNavigable(root)
+        root.recycle()
+        if (nodes.isEmpty()) return false
+
+        val currentIndex = nodes.indexOfFirst { it.isAccessibilityFocused }
+        val lastIndex = nodes.lastIndex
+        val (targetIndex, wrapped) = when {
+            currentIndex < 0 -> (if (forward) 0 else lastIndex) to false
+            forward && currentIndex == lastIndex -> 0 to true
+            !forward && currentIndex == 0 -> lastIndex to true
+            else -> (currentIndex + if (forward) 1 else -1) to false
+        }
+
+        val done = nodes[targetIndex].performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+        if (done && wrapped && targetIndex != currentIndex) {
+            boundaryAnnouncement = if (forward) BOUNDARY_START else BOUNDARY_END
+        }
+        nodes.forEach { it.recycle() }
+        return done
+    }
+
+    /** Lista, en orden de lectura, los nodos visibles que Vidente sabe anunciar. */
+    @Suppress("DEPRECATION")
+    private fun collectNavigable(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
+        val out = mutableListOf<AccessibilityNodeInfo>()
+
+        fun walk(node: AccessibilityNodeInfo) {
+            if (out.size >= MAX_NAV_NODES) return
+            if (isNavigable(node)) {
+                out.add(AccessibilityNodeInfo.obtain(node))
+                // Una fila clickeable es una sola parada: no se entra en sus hijos.
+                if (node.isClickable) return
+            }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                walk(child)
+                child.recycle()
+            }
+        }
+
+        walk(root)
+        return out
+    }
+
+    private fun isNavigable(node: AccessibilityNodeInfo): Boolean {
+        if (!node.isVisibleToUser) return false
+        val interactive = node.isClickable || node.isCheckable || node.isEditable
+        if (!interactive && ownLabel(node) == null) return false
+        if (!interactive && !node.isEnabled) return false
+        return true
     }
 
     /**
@@ -490,10 +572,12 @@ class VidenteAccessibilityService :
     // ---- Tutorial de bienvenida (P21) ----
 
     /**
-     * Guía por voz los tres gestos básicos. Cada paso explica el gesto, pide
-     * practicarlo y confirma en voz antes de avanzar. Mientras el tutorial
-     * está activo ningún gesto ejecuta su acción real (no se va a Inicio, no
-     * se activa ningún elemento): solo cuentan como práctica.
+     * Guía por voz los cuatro gestos básicos: explorar (un toque), activar
+     * (doble toque), moverse entre elementos (deslizar a la derecha o a la
+     * izquierda) y la barra del sistema (arriba para Inicio, abajo en ángulo
+     * para Atrás y Recientes). Cada paso explica el gesto, pide practicarlo y
+     * confirma en voz antes de avanzar. Mientras el tutorial está activo
+     * ningún gesto ejecuta su acción real: solo cuenta como práctica.
      */
     private fun startTutorial() {
         if (!ttsReady) {
@@ -501,7 +585,7 @@ class VidenteAccessibilityService :
             return
         }
         pendingTutorial = false
-        practicedSwipes.clear()
+        practicedGestures.clear()
         tutorialStep = TutorialStep.EXPLORE
         speakTutorial("$TUTORIAL_INTRO $TUTORIAL_EXPLORE")
     }
@@ -514,9 +598,9 @@ class VidenteAccessibilityService :
 
     private fun onDoubleTapPracticed() {
         if (tutorialStep != TutorialStep.DOUBLE_TAP || !tutorialInputEnabled) return
-        tutorialStep = TutorialStep.SWIPES
-        practicedSwipes.clear()
-        speakTutorial("$TUTORIAL_DOUBLE_TAP_OK $TUTORIAL_SWIPES $TUTORIAL_SWIPE_FIRST")
+        tutorialStep = TutorialStep.NAVIGATE
+        practicedGestures.clear()
+        speakTutorial("$TUTORIAL_DOUBLE_TAP_OK $TUTORIAL_NAVIGATE $TUTORIAL_NAVIGATE_FIRST")
     }
 
     private fun handleTutorialGesture(gestureId: Int): Boolean {
@@ -526,34 +610,59 @@ class VidenteAccessibilityService :
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && gestureId == GESTURE_DOUBLE_TAP) {
                     onDoubleTapPracticed()
                 }
-            TutorialStep.SWIPES -> onTutorialSwipe(gestureId)
+            TutorialStep.NAVIGATE -> onNavigatePracticed(gestureId)
+            TutorialStep.SYSTEM -> onSystemPracticed(gestureId)
             else -> Unit
         }
         return true
     }
 
-    private fun onTutorialSwipe(gestureId: Int) {
-        if (gestureId !in SWIPE_GESTURES) return
+    private fun onNavigatePracticed(gestureId: Int) {
+        if (gestureId !in NAVIGATE_GESTURES) return
 
-        val firstTime = practicedSwipes.add(gestureId)
+        val firstTime = practicedGestures.add(gestureId)
+        val ok = if (gestureId == GESTURE_SWIPE_RIGHT) "Bien, elemento siguiente." else "Bien, elemento anterior."
+
+        if (practicedGestures.containsAll(NAVIGATE_GESTURES)) {
+            practicedGestures.clear()
+            tutorialStep = TutorialStep.SYSTEM
+            speakTutorial("$ok $TUTORIAL_SYSTEM $TUTORIAL_SYSTEM_FIRST")
+            return
+        }
+
+        val next = if (GESTURE_SWIPE_RIGHT !in practicedGestures) {
+            "Ahora desliza a la derecha para ir al siguiente."
+        } else {
+            "Ahora desliza a la izquierda para volver al anterior."
+        }
+        speakTutorial(if (firstTime) "$ok $next" else next)
+    }
+
+    private fun onSystemPracticed(gestureId: Int) {
+        if (gestureId !in SYSTEM_GESTURES) return
+
+        val firstTime = practicedGestures.add(gestureId)
         val ok = when (gestureId) {
-            GESTURE_SWIPE_LEFT -> "Bien, eso es Atrás."
             GESTURE_SWIPE_UP -> "Bien, eso es Inicio."
+            GESTURE_SWIPE_DOWN_AND_LEFT -> "Bien, eso es Atrás."
             else -> "Bien, eso es Recientes."
         }
 
-        if (practicedSwipes.size >= SWIPE_GESTURES.size) {
+        if (practicedGestures.containsAll(SYSTEM_GESTURES)) {
             tutorialStep = TutorialStep.NONE
-            practicedSwipes.clear()
+            practicedGestures.clear()
             VidentePreferences.setTutorialDone(this, true)
             speakTutorial("$ok $TUTORIAL_DONE")
             return
         }
 
         val next = when {
-            GESTURE_SWIPE_LEFT !in practicedSwipes -> "Ahora desliza a la izquierda para Atrás."
-            GESTURE_SWIPE_UP !in practicedSwipes -> "Ahora desliza hacia arriba para Inicio."
-            else -> "Ahora desliza a la derecha para Recientes."
+            GESTURE_SWIPE_UP !in practicedGestures ->
+                "Ahora desliza hacia arriba para Inicio."
+            GESTURE_SWIPE_DOWN_AND_LEFT !in practicedGestures ->
+                "Ahora desliza hacia abajo y luego a la izquierda para Atrás."
+            else ->
+                "Ahora desliza hacia abajo y luego a la derecha para Recientes."
         }
         speakTutorial(if (firstTime) "$ok $next" else next)
     }
@@ -580,10 +689,14 @@ class VidenteAccessibilityService :
         private const val MAX_CLICKABLE_ANCESTOR_DEPTH = 6
         private const val MAX_LINES = 60
         private const val MAX_SUMMARY_CHARS = 4000
+        private const val MAX_NAV_NODES = 200
+
+        private const val BOUNDARY_START = "Principio de la pantalla"
+        private const val BOUNDARY_END = "Final de la pantalla"
 
         // ---- Textos del tutorial de bienvenida (P21) ----
         private const val TUTORIAL_INTRO =
-            "Bienvenido a Vidente. Vamos a practicar los tres gestos básicos. " +
+            "Bienvenido a Vidente. Vamos a practicar los cuatro gestos básicos. " +
                 "Puedes repetir este tutorial cuando quieras desde Ajustes."
         private const val TUTORIAL_EXPLORE =
             "Primer gesto: explorar. Apoya un dedo en la pantalla y muévelo despacio. " +
@@ -595,14 +708,25 @@ class VidenteAccessibilityService :
                 "No hace falta tocar justo encima del elemento: se activa el último que Vidente leyó. " +
                 "Pruébalo ahora: dos toques rápidos."
         private const val TUTORIAL_DOUBLE_TAP_OK = "Muy bien. Eso es activar."
-        private const val TUTORIAL_SWIPES =
-            "Tercer gesto: la barra del sistema, deslizando un dedo. " +
-                "A la izquierda es Atrás, hacia arriba es Inicio, y a la derecha es Recientes. " +
-                "Vamos a probar las tres."
-        private const val TUTORIAL_SWIPE_FIRST = "Empieza deslizando a la izquierda para Atrás."
+        private const val TUTORIAL_NAVIGATE =
+            "Tercer gesto: moverte por la pantalla, elemento por elemento. " +
+                "Desliza un dedo a la derecha para ir al elemento siguiente, " +
+                "y a la izquierda para volver al anterior. " +
+                "Vidente te leerá cada elemento al llegar. Vamos a probar los dos."
+        private const val TUTORIAL_NAVIGATE_FIRST =
+            "Empieza deslizando a la derecha para ir al siguiente."
+        private const val TUTORIAL_SYSTEM =
+            "Cuarto y último gesto: la barra del sistema. " +
+                "Desliza hacia arriba para ir a Inicio. " +
+                "Desliza hacia abajo y luego a la izquierda, en un solo movimiento, para Atrás. " +
+                "Y hacia abajo y luego a la derecha para Recientes. Vamos a probar los tres."
+        private const val TUTORIAL_SYSTEM_FIRST =
+            "Empieza deslizando hacia arriba para Inicio."
         private const val TUTORIAL_DONE =
-            "El tutorial terminó. Ya conoces los tres gestos: explorar con un toque, " +
-                "activar con dos toques, y la barra del sistema deslizando un dedo. " +
+            "El tutorial terminó. Ya conoces los cuatro gestos: explorar con un toque, " +
+                "activar con dos toques, moverte con un dedo a la derecha o a la izquierda, " +
+                "y la barra del sistema deslizando hacia arriba para Inicio o hacia abajo " +
+                "en ángulo para Atrás y Recientes. " +
                 "Puedes repetirlo cuando quieras desde Ajustes, con el botón Repetir tutorial."
     }
 }
