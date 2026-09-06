@@ -92,7 +92,30 @@ class VidenteAccessibilityService :
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val node = event?.source ?: return
+        event ?: return
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_HOVER_ENTER -> handleFocusEvent(event)
+
+            // Base para P8: cambios de pantalla y ventana, diálogos, escritura,
+            // scroll, selección y anuncios de la app. Por ahora solo se
+            // reciben; el anuncio hablado de cada uno se implementa en P8.
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_SCROLLED,
+            AccessibilityEvent.TYPE_VIEW_SELECTED,
+            AccessibilityEvent.TYPE_ANNOUNCEMENT -> Unit
+
+            else -> Unit
+        }
+    }
+
+    /** Lectura hablada del elemento que recibe el foco o el toque. */
+    private fun handleFocusEvent(event: AccessibilityEvent) {
+        val node = event.source ?: return
         val text = describeForSpeech(node)
         node.recycle()
 
