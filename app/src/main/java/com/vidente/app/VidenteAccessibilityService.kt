@@ -327,41 +327,30 @@ class VidenteAccessibilityService :
     // ---- Activación de la barra de navegación del sistema ----
 
     /**
-     * Los botones Atrás/Inicio/Recientes viven en com.android.systemui y no
-     * responden al ACTION_CLICK que inyecta el doble toque; la vía correcta es
-     * performGlobalAction. Interceptamos el doble toque solo para ellos y
-     * devolvemos false en cualquier otro caso, para que Android siga activando
-     * el resto de la interfaz como hasta ahora.
+     * Atrás/Inicio/Recientes se activan con un deslizamiento de un dedo en
+     * cualquier parte de la pantalla. Se eligieron deslizamientos direccionales
+     * porque son fáciles de hacer sin ver la pantalla, no dependen de
+     * coordenadas ni de tener el foco puesto sobre la barra del sistema, y no
+     * chocan con el doble toque, que sigue activando el elemento enfocado.
+     *
+     *   Deslizar a la izquierda -> Atrás
+     *   Deslizar hacia arriba   -> Inicio
+     *   Deslizar a la derecha   -> Recientes
+     *
+     * Los botones del sistema viven en com.android.systemui y no responden al
+     * ACTION_CLICK del doble toque; la vía correcta es performGlobalAction.
      */
     override fun onGesture(gestureId: Int): Boolean {
-        if (gestureId != GESTURE_DOUBLE_TAP) return false
-
-        val focused = findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY) ?: return false
-        val action = globalActionFor(focused)
-        focused.recycle()
-
-        return action != null && performGlobalAction(action)
-    }
-
-    private fun globalActionFor(node: AccessibilityNodeInfo): Int? {
-        if (node.packageName?.toString() != SYSTEM_UI_PACKAGE) return null
-
-        val viewId = node.viewIdResourceName.orEmpty().substringAfterLast('/').lowercase()
-        val label = node.contentDescription?.toString()?.lowercase().orEmpty()
-
-        return when {
-            viewId.contains("back") ||
-                label.contains("atrás") || label.contains("atras") ||
-                label.contains("volver") || label.contains("back") -> GLOBAL_ACTION_BACK
-
-            viewId.contains("home") ||
-                label.contains("inicio") || label.contains("home") -> GLOBAL_ACTION_HOME
-
-            viewId.contains("recent") ||
-                label.contains("recient") || label.contains("recent") -> GLOBAL_ACTION_RECENTS
-
-            else -> null
+        val (action, spoken) = when (gestureId) {
+            GESTURE_SWIPE_LEFT -> GLOBAL_ACTION_BACK to "Atrás"
+            GESTURE_SWIPE_UP -> GLOBAL_ACTION_HOME to "Inicio"
+            GESTURE_SWIPE_RIGHT -> GLOBAL_ACTION_RECENTS to "Recientes"
+            else -> return false
         }
+
+        val done = performGlobalAction(action)
+        if (done && ttsReady) speak(spoken)
+        return done
     }
 
     override fun onInterrupt() {
@@ -378,11 +367,6 @@ class VidenteAccessibilityService :
 
     companion object {
         private const val TAG = "VidenteA11yService"
-        private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
-
-        // AccessibilityService.GESTURE_DOUBLE_TAP existe desde API 30; se usa por
-        // valor para no subir el minSdk (en API 26-29 el sistema nunca lo envía).
-        private const val GESTURE_DOUBLE_TAP = 17
         private const val UTTERANCE_ID = "vidente_utterance"
         private const val FLOATING_BUTTON_MARGIN_PX = 24
         private const val MAX_DEPTH = 12
