@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.media.AudioAttributes
+import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -92,7 +93,7 @@ class VidenteAccessibilityService :
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val node = event?.source ?: return
-        val text = extractText(node)
+        val text = describeForSpeech(node)
         node.recycle()
 
         if (text.isNullOrBlank() || text == lastSpoken) return
@@ -101,10 +102,99 @@ class VidenteAccessibilityService :
         if (ttsReady) speak(text) else pendingText = text
     }
 
-    private fun extractText(node: AccessibilityNodeInfo): String? = when {
-        !node.text.isNullOrBlank() -> node.text.toString()
-        !node.contentDescription.isNullOrBlank() -> node.contentDescription.toString()
-        else -> null
+    /**
+     * Anuncio hablado de un nodo: nombre, rol y estado.
+     * Ej: "Wi-Fi, interruptor, activado".
+     */
+    private fun describeForSpeech(node: AccessibilityNodeInfo): String? {
+        val label = findLabel(node) ?: return null
+        val parts = mutableListOf(label)
+        roleOf(node)?.let { parts.add(it) }
+        parts.addAll(statesOf(node))
+        return parts.joinToString(", ")
+    }
+
+    /** Etiqueta propia del nodo, sin mirar el resto del árbol. */
+    private fun ownLabel(node: AccessibilityNodeInfo): String? =
+        node.text?.toString()?.takeIf { it.isNotBlank() }
+            ?: node.contentDescription?.toString()?.takeIf { it.isNotBlank() }
+            ?: node.hintText?.toString()?.takeIf { it.isNotBlank() }
+
+    /**
+     * Un Switch suele venir sin texto propio: su etiqueta vive en un TextView
+     * hermano (o en un hijo, si el foco cayó sobre la fila que los contiene).
+     * Sin esta búsqueda el nodo se descartaba y no se leía nada.
+     */
+    private fun findLabel(node: AccessibilityNodeInfo): String? =
+        ownLabel(node)
+            ?: labelFromDescendants(node, depth = 0)
+            ?: labelFromSiblings(node)
+
+    private fun labelFromDescendants(node: AccessibilityNodeInfo, depth: Int): String? {
+        if (depth >= MAX_LABEL_DEPTH) return null
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val label = ownLabel(child) ?: labelFromDescendants(child, depth + 1)
+            child.recycle()
+            if (label != null) return label
+        }
+        return null
+    }
+
+    private fun labelFromSiblings(node: AccessibilityNodeInfo): String? {
+        val parent = node.parent ?: return null
+        var label: String? = null
+
+        for (i in 0 until parent.childCount) {
+            val sibling = parent.getChild(i) ?: continue
+            if (sibling != node) {
+                label = ownLabel(sibling) ?: labelFromDescendants(sibling, depth = 1)
+            }
+            sibling.recycle()
+            if (label != null) break
+        }
+
+        parent.recycle()
+        return label
+    }
+
+    private fun roleOf(node: AccessibilityNodeInfo): String? {
+        val className = node.className?.toString().orEmpty()
+        return when {
+            node.isEditable || className.endsWith("EditText") -> "campo de texto"
+            className.endsWith("Switch") ||
+                className.endsWith("SwitchCompat") ||
+                className.endsWith("SwitchMaterial") ||
+                className.endsWith("ToggleButton") -> "interruptor"
+            className.endsWith("CheckBox") -> "casilla"
+            className.endsWith("RadioButton") -> "opción"
+            node.isCheckable -> "casilla"
+            className.endsWith("SeekBar") -> "control deslizante"
+            className.endsWith("Button") || node.isClickable -> "botón"
+            else -> null
+        }
+    }
+
+    private fun statesOf(node: AccessibilityNodeInfo): List<String> {
+        val states = mutableListOf<String>()
+
+        // stateDescription lo define la app y es más preciso que deducirlo.
+        val stateDescription = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            node.stateDescription?.toString()?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
+
+        when {
+            stateDescription != null -> states.add(stateDescription)
+            node.isCheckable -> states.add(if (node.isChecked) "activado" else "desactivado")
+        }
+
+        if (node.isSelected) states.add("seleccionado")
+        if (!node.isEnabled) states.add("no disponible")
+
+        return states
     }
 
     private fun speak(text: String) {
@@ -229,16 +319,8 @@ class VidenteAccessibilityService :
     }
 
     private fun describeNode(node: AccessibilityNodeInfo): String? {
-        val label = node.text?.toString()?.takeIf { it.isNotBlank() }
-            ?: node.contentDescription?.toString()?.takeIf { it.isNotBlank() }
-            ?: return null
-
-        val role = when {
-            node.isEditable -> "Campo de texto"
-            node.isCheckable -> "Casilla"
-            node.isClickable -> "Botón"
-            else -> "Texto"
-        }
+        val label = ownLabel(node) ?: return null
+        val role = (roleOf(node) ?: "texto").replaceFirstChar { it.uppercase() }
         return "[$role] $label"
     }
 
@@ -259,6 +341,7 @@ class VidenteAccessibilityService :
         private const val UTTERANCE_ID = "vidente_utterance"
         private const val FLOATING_BUTTON_MARGIN_PX = 24
         private const val MAX_DEPTH = 12
+        private const val MAX_LABEL_DEPTH = 3
         private const val MAX_LINES = 60
         private const val MAX_SUMMARY_CHARS = 4000
     }
