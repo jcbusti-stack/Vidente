@@ -13,6 +13,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -32,6 +33,16 @@ class VidenteAccessibilityService :
     private var ttsReady = false
     private var lastSpoken: String? = null
     private var pendingText: String? = null
+
+    private enum class TutorialStep { NONE, EXPLORE, DOUBLE_TAP, SWIPES }
+    private var tutorialStep = TutorialStep.NONE
+    private val practicedSwipes = mutableSetOf<Int>()
+    private var pendingTutorial = false
+    // Solo se aceptan gestos de práctica cuando la instrucción hablada terminó,
+    // para que un evento de foco al arrancar no salte el primer paso ni corte
+    // la introducción.
+    @Volatile private var tutorialInputEnabled = false
+    private val SWIPE_GESTURES = setOf(GESTURE_SWIPE_LEFT, GESTURE_SWIPE_UP, GESTURE_SWIPE_RIGHT)
 
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
@@ -63,11 +74,27 @@ class VidenteAccessibilityService :
         )
         applyPreferences(engine)
 
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+
+            override fun onDone(utteranceId: String?) {
+                if (utteranceId == TUTORIAL_UTTERANCE_ID) tutorialInputEnabled = true
+            }
+
+            // Firma obligatoria de la clase abstracta. Reactivamos la práctica
+            // igual que en onDone para no dejar el tutorial bloqueado si una
+            // locución falla.
+            override fun onError(utteranceId: String?) {
+                if (utteranceId == TUTORIAL_UTTERANCE_ID) tutorialInputEnabled = true
+            }
+        })
+
         ttsReady = true
         // El primer elemento enfocado puede llegar antes de que el motor TTS
         // termine de inicializarse; lo guardamos para no perder esa lectura.
         pendingText?.let { speak(it) }
         pendingText = null
+        if (pendingTutorial) startTutorial()
     }
 
     private fun applyPreferences(engine: TextToSpeech) {
@@ -83,12 +110,27 @@ class VidenteAccessibilityService :
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         tts?.let { applyPreferences(it) }
+
+        if (key == VidentePreferences.KEY_TUTORIAL_REQUESTED &&
+            VidentePreferences.isTutorialRequested(this)
+        ) {
+            VidentePreferences.setTutorialRequested(this, false)
+            startTutorial()
+        }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "Vidente conectado")
         showFloatingButton()
+
+        // Tutorial de bienvenida la primera vez que se activa el servicio.
+        // Se marca como visto al arrancarlo para no repetirlo en cada
+        // reconexión; se puede repasar desde Ajustes.
+        if (!VidentePreferences.isTutorialDone(this)) {
+            VidentePreferences.setTutorialDone(this, true)
+            startTutorial()
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -98,12 +140,17 @@ class VidenteAccessibilityService :
             AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED,
             AccessibilityEvent.TYPE_VIEW_HOVER_ENTER -> handleFocusEvent(event)
 
+            // En Android 10 o menos el doble toque del tutorial no llega como
+            // gesto, pero el sistema lo convierte en un click: lo usamos como
+            // señal de que el usuario practicó el paso de "activar".
+            AccessibilityEvent.TYPE_VIEW_CLICKED ->
+                if (tutorialStep == TutorialStep.DOUBLE_TAP) onDoubleTapPracticed()
+
             // Base para P8: cambios de pantalla y ventana, diálogos, escritura,
             // scroll, selección y anuncios de la app. Por ahora solo se
             // reciben; el anuncio hablado de cada uno se implementa en P8.
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_SCROLLED,
             AccessibilityEvent.TYPE_VIEW_SELECTED,
@@ -115,6 +162,10 @@ class VidenteAccessibilityService :
 
     /** Lectura hablada del elemento que recibe el foco o el toque. */
     private fun handleFocusEvent(event: AccessibilityEvent) {
+        // Durante el tutorial no se lee nada hasta que termina la instrucción
+        // hablada; así el primer paso no se completa solo al arrancar.
+        if (tutorialStep != TutorialStep.NONE && !tutorialInputEnabled) return
+
         val node = event.source ?: return
         val text = describeForSpeech(node)
         node.recycle()
@@ -123,6 +174,8 @@ class VidenteAccessibilityService :
 
         lastSpoken = text
         if (ttsReady) speak(text) else pendingText = text
+
+        if (tutorialStep == TutorialStep.EXPLORE) onExplorePracticed()
     }
 
     /**
@@ -222,6 +275,17 @@ class VidenteAccessibilityService :
 
     private fun speak(text: String) {
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
+    }
+
+    /**
+     * Habla una instrucción del tutorial. Deshabilita la práctica hasta que
+     * esta locución termine (lo reactiva el UtteranceProgressListener).
+     * flush=false encola detrás de la lectura del elemento recién explorado.
+     */
+    private fun speakTutorial(text: String, flush: Boolean = true) {
+        tutorialInputEnabled = false
+        val mode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+        tts?.speak(text, mode, null, TUTORIAL_UTTERANCE_ID)
     }
 
     // ---- Modo conversacional ----
@@ -370,6 +434,8 @@ class VidenteAccessibilityService :
      * defecto del sistema.
      */
     override fun onGesture(gestureId: Int): Boolean {
+        if (tutorialStep != TutorialStep.NONE) return handleTutorialGesture(gestureId)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && gestureId == GESTURE_DOUBLE_TAP) {
             return activateFocusedElement()
         }
@@ -421,6 +487,77 @@ class VidenteAccessibilityService :
         return null
     }
 
+    // ---- Tutorial de bienvenida (P21) ----
+
+    /**
+     * Guía por voz los tres gestos básicos. Cada paso explica el gesto, pide
+     * practicarlo y confirma en voz antes de avanzar. Mientras el tutorial
+     * está activo ningún gesto ejecuta su acción real (no se va a Inicio, no
+     * se activa ningún elemento): solo cuentan como práctica.
+     */
+    private fun startTutorial() {
+        if (!ttsReady) {
+            pendingTutorial = true
+            return
+        }
+        pendingTutorial = false
+        practicedSwipes.clear()
+        tutorialStep = TutorialStep.EXPLORE
+        speakTutorial("$TUTORIAL_INTRO $TUTORIAL_EXPLORE")
+    }
+
+    private fun onExplorePracticed() {
+        if (!tutorialInputEnabled) return
+        tutorialStep = TutorialStep.DOUBLE_TAP
+        speakTutorial("$TUTORIAL_EXPLORE_OK $TUTORIAL_DOUBLE_TAP", flush = false)
+    }
+
+    private fun onDoubleTapPracticed() {
+        if (tutorialStep != TutorialStep.DOUBLE_TAP || !tutorialInputEnabled) return
+        tutorialStep = TutorialStep.SWIPES
+        practicedSwipes.clear()
+        speakTutorial("$TUTORIAL_DOUBLE_TAP_OK $TUTORIAL_SWIPES $TUTORIAL_SWIPE_FIRST")
+    }
+
+    private fun handleTutorialGesture(gestureId: Int): Boolean {
+        if (!tutorialInputEnabled) return true
+        when (tutorialStep) {
+            TutorialStep.DOUBLE_TAP ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && gestureId == GESTURE_DOUBLE_TAP) {
+                    onDoubleTapPracticed()
+                }
+            TutorialStep.SWIPES -> onTutorialSwipe(gestureId)
+            else -> Unit
+        }
+        return true
+    }
+
+    private fun onTutorialSwipe(gestureId: Int) {
+        if (gestureId !in SWIPE_GESTURES) return
+
+        val firstTime = practicedSwipes.add(gestureId)
+        val ok = when (gestureId) {
+            GESTURE_SWIPE_LEFT -> "Bien, eso es Atrás."
+            GESTURE_SWIPE_UP -> "Bien, eso es Inicio."
+            else -> "Bien, eso es Recientes."
+        }
+
+        if (practicedSwipes.size >= SWIPE_GESTURES.size) {
+            tutorialStep = TutorialStep.NONE
+            practicedSwipes.clear()
+            VidentePreferences.setTutorialDone(this, true)
+            speakTutorial("$ok $TUTORIAL_DONE")
+            return
+        }
+
+        val next = when {
+            GESTURE_SWIPE_LEFT !in practicedSwipes -> "Ahora desliza a la izquierda para Atrás."
+            GESTURE_SWIPE_UP !in practicedSwipes -> "Ahora desliza hacia arriba para Inicio."
+            else -> "Ahora desliza a la derecha para Recientes."
+        }
+        speakTutorial(if (firstTime) "$ok $next" else next)
+    }
+
     override fun onInterrupt() {
         tts?.stop()
     }
@@ -436,11 +573,36 @@ class VidenteAccessibilityService :
     companion object {
         private const val TAG = "VidenteA11yService"
         private const val UTTERANCE_ID = "vidente_utterance"
+        private const val TUTORIAL_UTTERANCE_ID = "vidente_tutorial"
         private const val FLOATING_BUTTON_MARGIN_PX = 24
         private const val MAX_DEPTH = 12
         private const val MAX_LABEL_DEPTH = 3
         private const val MAX_CLICKABLE_ANCESTOR_DEPTH = 6
         private const val MAX_LINES = 60
         private const val MAX_SUMMARY_CHARS = 4000
+
+        // ---- Textos del tutorial de bienvenida (P21) ----
+        private const val TUTORIAL_INTRO =
+            "Bienvenido a Vidente. Vamos a practicar los tres gestos básicos. " +
+                "Puedes repetir este tutorial cuando quieras desde Ajustes."
+        private const val TUTORIAL_EXPLORE =
+            "Primer gesto: explorar. Apoya un dedo en la pantalla y muévelo despacio. " +
+                "Vidente te irá leyendo lo que hay bajo tu dedo, sin activar nada. " +
+                "Pruébalo ahora: toca cualquier parte de la pantalla."
+        private const val TUTORIAL_EXPLORE_OK = "Muy bien. Eso es explorar."
+        private const val TUTORIAL_DOUBLE_TAP =
+            "Segundo gesto: activar. Da dos toques rápidos en cualquier parte de la pantalla. " +
+                "No hace falta tocar justo encima del elemento: se activa el último que Vidente leyó. " +
+                "Pruébalo ahora: dos toques rápidos."
+        private const val TUTORIAL_DOUBLE_TAP_OK = "Muy bien. Eso es activar."
+        private const val TUTORIAL_SWIPES =
+            "Tercer gesto: la barra del sistema, deslizando un dedo. " +
+                "A la izquierda es Atrás, hacia arriba es Inicio, y a la derecha es Recientes. " +
+                "Vamos a probar las tres."
+        private const val TUTORIAL_SWIPE_FIRST = "Empieza deslizando a la izquierda para Atrás."
+        private const val TUTORIAL_DONE =
+            "El tutorial terminó. Ya conoces los tres gestos: explorar con un toque, " +
+                "activar con dos toques, y la barra del sistema deslizando un dedo. " +
+                "Puedes repetirlo cuando quieras desde Ajustes, con el botón Repetir tutorial."
     }
 }

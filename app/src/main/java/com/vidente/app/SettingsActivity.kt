@@ -48,6 +48,10 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         findViewById<Button>(R.id.buttonPreview).setOnClickListener { previewVoice() }
         findViewById<Button>(R.id.buttonReset).setOnClickListener { resetToDefaults() }
+        findViewById<Button>(R.id.buttonReplayTutorial).setOnClickListener {
+            VidentePreferences.setTutorialRequested(this, true)
+            Toast.makeText(this, R.string.settings_replay_tutorial_started, Toast.LENGTH_LONG).show()
+        }
 
         val editBackendUrl = findViewById<EditText>(R.id.editBackendUrl)
         val editBackendAccessKey = findViewById<EditText>(R.id.editBackendAccessKey)

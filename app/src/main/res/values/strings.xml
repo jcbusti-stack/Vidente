@@ -15,6 +15,8 @@
     <string name="settings_preview_button">Probar voz</string>
     <string name="settings_reset_button">Restablecer valores</string>
     <string name="settings_preview_text">Así sonará Vidente al leer los elementos en pantalla.</string>
+    <string name="settings_replay_tutorial">Repetir tutorial</string>
+    <string name="settings_replay_tutorial_started">El tutorial va a empezar. Escucha las instrucciones de Vidente.</string>
 
     <string name="settings_backend_url_label">Dirección del servidor de Vidente (para el modo conversacional)</string>
     <string name="settings_backend_url_hint">Ej: https://mi-vidente.onrender.com</string>

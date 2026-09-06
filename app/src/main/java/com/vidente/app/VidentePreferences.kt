@@ -12,6 +12,8 @@ object VidentePreferences {
     const val KEY_BACKEND_URL = "backend_url"
     const val KEY_BACKEND_ACCESS_KEY = "backend_access_key"
     const val KEY_DEVICE_ID = "device_id"
+    const val KEY_TUTORIAL_DONE = "tutorial_done"
+    const val KEY_TUTORIAL_REQUESTED = "tutorial_requested"
 
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
@@ -56,6 +58,25 @@ object VidentePreferences {
 
     fun setBackendAccessKey(context: Context, key: String) {
         prefs(context).edit().putString(KEY_BACKEND_ACCESS_KEY, key.trim()).apply()
+    }
+
+    /** Se marca cuando el tutorial de bienvenida se muestra por primera vez. */
+    fun isTutorialDone(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_TUTORIAL_DONE, false)
+
+    fun setTutorialDone(context: Context, done: Boolean) {
+        prefs(context).edit().putBoolean(KEY_TUTORIAL_DONE, done).apply()
+    }
+
+    /**
+     * Bandera que Ajustes pone a true para pedirle al servicio que repita el
+     * tutorial; el servicio la vuelve a false en cuanto lo arranca.
+     */
+    fun isTutorialRequested(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_TUTORIAL_REQUESTED, false)
+
+    fun setTutorialRequested(context: Context, requested: Boolean) {
+        prefs(context).edit().putBoolean(KEY_TUTORIAL_REQUESTED, requested).apply()
     }
 
     /**
