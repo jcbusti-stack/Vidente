@@ -362,8 +362,18 @@ class VidenteAccessibilityService :
      *
      * Los botones del sistema viven en com.android.systemui y no responden al
      * ACTION_CLICK del doble toque; la vía correcta es performGlobalAction.
+     *
+     * El doble toque (P4) activa el elemento enfocado con un ACTION_CLICK
+     * explícito sobre el ancestro clickeable más cercano, en vez de depender
+     * del toque por coordenadas de Android. GESTURE_DOUBLE_TAP solo existe
+     * desde API 30; en versiones anteriores se conserva el comportamiento por
+     * defecto del sistema.
      */
     override fun onGesture(gestureId: Int): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && gestureId == GESTURE_DOUBLE_TAP) {
+            return activateFocusedElement()
+        }
+
         val (action, spoken) = when (gestureId) {
             GESTURE_SWIPE_LEFT -> GLOBAL_ACTION_BACK to "Atrás"
             GESTURE_SWIPE_UP -> GLOBAL_ACTION_HOME to "Inicio"
@@ -374,6 +384,41 @@ class VidenteAccessibilityService :
         val done = performGlobalAction(action)
         if (done && ttsReady) speak(spoken)
         return done
+    }
+
+    /**
+     * Activa el elemento con foco de accesibilidad. Si ese nodo no es
+     * clickeable (caso típico: el foco cae sobre el texto de una fila, no
+     * sobre la fila), se sube por el árbol hasta el primer ancestro clickeable
+     * y se le manda ACTION_CLICK.
+     */
+    private fun activateFocusedElement(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        root.recycle()
+        focused ?: return false
+
+        val target = nearestClickable(focused)
+        val done = target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
+        if (target != null && target != focused) target.recycle()
+        focused.recycle()
+        return done
+    }
+
+    private fun nearestClickable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (node.isClickable) return node
+
+        var current: AccessibilityNodeInfo? = node.parent
+        var depth = 0
+        while (current != null && depth < MAX_CLICKABLE_ANCESTOR_DEPTH) {
+            if (current.isClickable) return current
+            val parent = current.parent
+            current.recycle()
+            current = parent
+            depth++
+        }
+        current?.recycle()
+        return null
     }
 
     override fun onInterrupt() {
@@ -394,6 +439,7 @@ class VidenteAccessibilityService :
         private const val FLOATING_BUTTON_MARGIN_PX = 24
         private const val MAX_DEPTH = 12
         private const val MAX_LABEL_DEPTH = 3
+        private const val MAX_CLICKABLE_ANCESTOR_DEPTH = 6
         private const val MAX_LINES = 60
         private const val MAX_SUMMARY_CHARS = 4000
     }
