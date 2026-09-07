@@ -86,7 +86,6 @@ class VidenteAccessibilityService :
     // ---- Anuncio de título de pantalla (P8a) ----
     private var lastWindowTitle: String? = null
     private var pendingTitleRunnable: Runnable? = null
-    private var lastDiagNarration: String? = null
 
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
@@ -193,7 +192,6 @@ class VidenteAccessibilityService :
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
-        if (DIAG_MODE) diagLogEvent(event)
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_FOCUSED,
             AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED,
@@ -234,68 +232,36 @@ class VidenteAccessibilityService :
         navMode = NavMode.ELEMENT
     }
 
-    /** Diagnóstico P8a: registra en Logcat los eventos candidatos a "cambio de pantalla". */
-    private fun diagLogEvent(event: AccessibilityEvent) {
-        val name = when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> "WINDOW_STATE_CHANGED"
-            AccessibilityEvent.TYPE_ANNOUNCEMENT -> "ANNOUNCEMENT"
-            else -> return
-        }
-        Log.d(DIAG_TAG, "$name pkg=${event.packageName} cls=${event.className} text=${event.text}")
-    }
-
     /**
-     * P8a: anuncio del título de la pantalla nueva.
+     * P8a: al entrar en una pantalla nueva, anuncia su título.
      *
-     * BUILD DE DIAGNÓSTICO 3 (DIAG_MODE = true): narra CADA evento de cambio
-     * de ventana, encadenado (QUEUE_ADD) y sin filtrar ni cancelar, para ver
-     * exactamente qué dispara cada transición y qué trae cada uno (paquete,
-     * nombre de app, texto). En la v2 el retardo largo y la cancelación
-     * dejaban que un evento de transición sin paquete pisara al bueno de la
-     * app, y se anunciaba "sin aplicación". Sin getWindows().
+     * Fuente del título, por orden: el texto del evento cuando parece un
+     * título de verdad (no el paquete ni un nombre con puntos), y si no, el
+     * nombre visible de la app. Si ninguno sirve, no dice nada (mejor callar
+     * que soltar "com.algo"). Se ignoran ventanas del sistema y del propio
+     * Vidente, no se repite el mismo título, y un único Runnable con retardo
+     * agrupa la ráfaga de eventos de una transición: así appLabel(), que hace
+     * una llamada al PackageManager, se invoca como mucho una vez por cambio
+     * de pantalla y no compite con el despacho de gestos.
+     *
+     * No se usa getWindows(): interfería con performGlobalAction/performAction.
      */
     private fun handleWindowTitle(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString()
-        val fromEvent = event.text?.joinToString(" ")?.trim()?.takeIf { it.isNotBlank() }
-        val cls = event.className?.toString()?.substringAfterLast('.')
-
-        if (DIAG_MODE) {
-            Log.d(TAG, "P8a WSC pkg='$pkg' cls='$cls' text='$fromEvent'")
-            mainHandler.postDelayed({
-                try {
-                    val app = appLabel(pkg)
-                    val line = "Ventana. Paquete: ${pkg ?: "nulo"}. " +
-                        "Aplicación: ${app ?: "ninguna"}. " +
-                        "Texto: ${fromEvent ?: "vacío"}."
-                    if (line != lastDiagNarration) {
-                        lastDiagNarration = line
-                        tts?.speak(line, TextToSpeech.QUEUE_ADD, null, UTTERANCE_ID)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "P8a: fallo narrando diagnóstico de ventana", e)
-                }
-            }, DIAG_NARRATION_DELAY_MS)
-            return
-        }
-
-        // Ruta real (DIAG_MODE = false): filtra transiciones sin paquete útil,
-        // deduplica y aplica un retardo corto.
         if (pkg.isNullOrBlank() || pkg == packageName ||
             pkg == "com.android.systemui" || pkg == "android"
         ) {
             return
         }
+
+        val eventText = event.text?.joinToString(" ")?.trim()?.takeIf {
+            it.isNotBlank() && it != pkg && !it.startsWith("$pkg/") && !it.contains('.')
+        }
+
         pendingTitleRunnable?.let { mainHandler.removeCallbacks(it) }
         val r = Runnable {
             try {
-                // En este teléfono event.text del cambio de ventana trae el
-                // paquete o el componente, no un título legible; solo se usa
-                // si de verdad parece un título. Si no, el nombre visible de
-                // la app.
-                val eventTitle = fromEvent?.takeIf {
-                    it != pkg && !it.startsWith("$pkg/") && !it.contains('.')
-                }
-                val title = eventTitle ?: appLabel(pkg)
+                val title = eventText ?: appLabel(pkg)
                 if (!title.isNullOrBlank() && title != lastWindowTitle) {
                     lastWindowTitle = title
                     speak(title)
@@ -309,10 +275,11 @@ class VidenteAccessibilityService :
     }
 
     /**
-     * Nombre visible de la app a partir del paquete. Requiere que el
-     * manifiesto declare QUERY_ALL_PACKAGES: en Android 11+ sin eso,
-     * getApplicationInfo lanza NameNotFoundException para casi cualquier app
-     * ajena, que era la causa de que "Aplicación" saliera siempre vacío.
+     * Nombre visible de la app a partir del paquete. En Android 11+ necesita
+     * QUERY_ALL_PACKAGES en el manifiesto; además MIUI/HyperOS lo condiciona a
+     * un permiso aparte ("Obtener lista de aplicaciones instaladas") que el
+     * usuario tiene que conceder a mano. Si falla, devuelve null y P8a se
+     * queda callado en esa pantalla.
      */
     private fun appLabel(pkg: String?): String? {
         if (pkg.isNullOrBlank()) return null
@@ -320,7 +287,7 @@ class VidenteAccessibilityService :
             val pm = packageManager
             pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString().trim().takeIf { it.isNotBlank() }
         } catch (e: Exception) {
-            if (DIAG_MODE) Log.w(TAG, "P8a: appLabel('$pkg') falló", e)
+            Log.w(TAG, "P8a: appLabel('$pkg') falló", e)
             null
         }
     }
@@ -1187,14 +1154,7 @@ class VidenteAccessibilityService :
         private const val BOUNDARY_START = "Principio de la pantalla"
         private const val BOUNDARY_END = "Final de la pantalla"
 
-        private const val WINDOW_TITLE_DEBOUNCE_MS = 250L
-        private const val DIAG_NARRATION_DELAY_MS = 120L
-
-        // Build de diagnóstico de P8a: Vidente narra qué trae cada evento de
-        // cambio de ventana y registra en Logcat los eventos candidatos.
-        // Poner en false cuando P8a quede resuelto.
-        private const val DIAG_MODE = true
-        private const val DIAG_TAG = "VidenteDiag"
+        private const val WINDOW_TITLE_DEBOUNCE_MS = 300L
 
         // ---- Textos del tutorial de bienvenida (P21) ----
         private const val TUTORIAL_INTRO =
