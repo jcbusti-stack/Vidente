@@ -86,6 +86,7 @@ class VidenteAccessibilityService :
     // ---- Anuncio de título de pantalla (P8a) ----
     private var lastWindowTitle: String? = null
     private var pendingTitleRunnable: Runnable? = null
+    private var lastDiagNarration: String? = null
 
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
@@ -246,45 +247,58 @@ class VidenteAccessibilityService :
     /**
      * P8a: anuncio del título de la pantalla nueva.
      *
-     * BUILD DE DIAGNÓSTICO 2 (DIAG_MODE = true): Vidente narra en voz qué trae
-     * cada evento de cambio de ventana. Respecto a la build anterior se ha
-     * QUITADO toda llamada a getWindows(), que se sospecha que competía con el
-     * despacho de gestos y acciones (los gestos se anunciaban pero no se
-     * ejecutaban). Ahora solo se usa el texto del evento y el nombre de la
-     * aplicación (PackageManager), y con más retardo.
+     * BUILD DE DIAGNÓSTICO 3 (DIAG_MODE = true): narra CADA evento de cambio
+     * de ventana, encadenado (QUEUE_ADD) y sin filtrar ni cancelar, para ver
+     * exactamente qué dispara cada transición y qué trae cada uno (paquete,
+     * nombre de app, texto). En la v2 el retardo largo y la cancelación
+     * dejaban que un evento de transición sin paquete pisara al bueno de la
+     * app, y se anunciaba "sin aplicación". Sin getWindows().
      */
     private fun handleWindowTitle(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString()
-        if (pkg == packageName || pkg == "com.android.systemui") return
-
         val fromEvent = event.text?.joinToString(" ")?.trim()?.takeIf { it.isNotBlank() }
         val cls = event.className?.toString()?.substringAfterLast('.')
 
+        if (DIAG_MODE) {
+            Log.d(TAG, "P8a WSC pkg='$pkg' cls='$cls' text='$fromEvent'")
+            mainHandler.postDelayed({
+                try {
+                    val app = appLabel(pkg)
+                    val line = "Ventana. Paquete: ${pkg ?: "nulo"}. " +
+                        "Aplicación: ${app ?: "ninguna"}. " +
+                        "Texto: ${fromEvent ?: "vacío"}."
+                    if (line != lastDiagNarration) {
+                        lastDiagNarration = line
+                        tts?.speak(line, TextToSpeech.QUEUE_ADD, null, UTTERANCE_ID)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "P8a: fallo narrando diagnóstico de ventana", e)
+                }
+            }, DIAG_NARRATION_DELAY_MS)
+            return
+        }
+
+        // Ruta real (DIAG_MODE = false): filtra transiciones sin paquete útil,
+        // deduplica y aplica un retardo corto.
+        if (pkg.isNullOrBlank() || pkg == packageName ||
+            pkg == "com.android.systemui" || pkg == "android"
+        ) {
+            return
+        }
         pendingTitleRunnable?.let { mainHandler.removeCallbacks(it) }
         val r = Runnable {
             try {
-                resolveAndAnnounceTitle(pkg, cls, fromEvent)
+                val title = fromEvent ?: appLabel(pkg)
+                if (!title.isNullOrBlank() && title != lastWindowTitle) {
+                    lastWindowTitle = title
+                    speak(title)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "P8a: fallo resolviendo el título de pantalla", e)
             }
         }
         pendingTitleRunnable = r
         mainHandler.postDelayed(r, WINDOW_TITLE_DEBOUNCE_MS)
-    }
-
-    private fun resolveAndAnnounceTitle(pkg: String?, cls: String?, fromEvent: String?) {
-        val app = appLabel(pkg)
-        Log.d(TAG, "P8a titulo: evento='$fromEvent' app='$app' clase='$cls'")
-
-        if (DIAG_MODE) {
-            speak("Ventana. Texto: ${fromEvent ?: "vacío"}. Aplicación: ${app ?: "ninguna"}.")
-            return
-        }
-
-        val title = fromEvent ?: app
-        if (title.isNullOrBlank() || title == lastWindowTitle) return
-        lastWindowTitle = title
-        speak(title)
     }
 
     private fun appLabel(pkg: String?): String? {
@@ -1159,7 +1173,8 @@ class VidenteAccessibilityService :
         private const val BOUNDARY_START = "Principio de la pantalla"
         private const val BOUNDARY_END = "Final de la pantalla"
 
-        private const val WINDOW_TITLE_DEBOUNCE_MS = 500L
+        private const val WINDOW_TITLE_DEBOUNCE_MS = 250L
+        private const val DIAG_NARRATION_DELAY_MS = 120L
 
         // Build de diagnóstico de P8a: Vidente narra qué trae cada evento de
         // cambio de ventana y registra en Logcat los eventos candidatos.
