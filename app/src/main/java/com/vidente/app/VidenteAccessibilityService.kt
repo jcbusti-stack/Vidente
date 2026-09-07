@@ -333,10 +333,13 @@ class VidenteAccessibilityService :
         }
         lastScrollBoundary = null
 
+        // Se prefiere el desplazamiento en píxeles (continuo y monótono) al
+        // índice de elemento, que en algunas apps (Contactos) no cambia por
+        // evento y dejaba el tono clavado.
         val fraction: Float = when {
-            itemCount > 1 && fromIndex >= 0 -> fromIndex.toFloat() / (itemCount - 1)
             maxScrollY > 0 && scrollY >= 0 -> scrollY.toFloat() / maxScrollY
             maxScrollX > 0 && scrollX >= 0 -> scrollX.toFloat() / maxScrollX
+            itemCount > 1 && fromIndex >= 0 -> fromIndex.toFloat() / (itemCount - 1)
             else -> null
         } ?: return
 
@@ -1361,6 +1364,10 @@ class VidenteAccessibilityService :
 
     private fun isNavigable(node: AccessibilityNodeInfo): Boolean {
         if (!node.isVisibleToUser) return false
+        // La app marca explícitamente este nodo como parada de lector de
+        // pantalla (React Native, Compose, algunas vistas nativas). El menú
+        // lateral de la app de Claude depende de esto.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && node.isScreenReaderFocusable) return true
         val interactive = node.isClickable || node.isCheckable || node.isEditable
         if (!interactive && ownLabel(node) == null) return false
         if (!interactive && !node.isEnabled) return false
