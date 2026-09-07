@@ -1087,6 +1087,23 @@ class VidenteAccessibilityService :
         root.recycle()
 
         val lastIndex = nodes.lastIndex
+
+        if (NAV_DIAG) {
+            val cur = nodes.getOrNull(currentIndex)?.let { describeForSpeech(it) } ?: "ninguno"
+            val nxt = when {
+                currentIndex < 0 -> if (forward) 0 else lastIndex
+                forward -> if (currentIndex >= lastIndex) 0 else currentIndex + 1
+                else -> if (currentIndex <= 0) lastIndex else currentIndex - 1
+            }
+            val nxtLabel = nodes.getOrNull(nxt)?.let { describeForSpeech(it) } ?: "ninguno"
+            speak(
+                "Diagnóstico. Total ${nodes.size}. Índice actual $currentIndex, foco $focusExists. " +
+                    "Actual: $cur. Destino $nxt: $nxtLabel."
+            )
+            nodes.forEach { it.recycle() }
+            return true
+        }
+
         val target: Int
         val wrapped: Boolean
         when {
@@ -1373,6 +1390,11 @@ class VidenteAccessibilityService :
 
         private const val BOUNDARY_START = "Principio de la pantalla"
         private const val BOUNDARY_END = "Final de la pantalla"
+
+        // Build de diagnóstico del bug de siguiente/anterior: en vez de mover
+        // el foco, Vidente narra el estado interno (total, índice actual,
+        // etiquetas). Poner en false cuando quede resuelto.
+        private const val NAV_DIAG = true
 
         private const val WINDOW_TITLE_DEBOUNCE_MS = 300L
         private const val KEYBOARD_DEBOUNCE_MS = 350L
