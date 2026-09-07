@@ -7,6 +7,8 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -90,6 +92,10 @@ class VidenteAccessibilityService :
     private var pendingKeyboardRunnable: Runnable? = null
     private var pendingScrollRunnable: Runnable? = null
     private var lastScrollAnnouncement: String? = null
+    // P8c: aviso de posición al hacer scroll como tono (grave = principio,
+    // agudo = final) en vez de porcentaje hablado. Configurable en Ajustes.
+    private var scrollFeedbackTone = true
+    @Volatile private var scrollToneTrack: AudioTrack? = null
     // Visibilidad del teclado por heurística (sin getWindows(), que rompía el
     // despacho de gestos): se marca visible al ver eventos de un método de
     // entrada o al enfocar un campo, y oculto al cambiar de pantalla o pulsar
@@ -149,21 +155,25 @@ class VidenteAccessibilityService :
         if (pendingTutorial) startTutorial()
     }
 
-    private fun applyPreferences(engine: TextToSpeech) {
-        // La ruta de audio se toma de Ajustes. Por defecto USAGE_MEDIA, que
-        // sale por el Bluetooth activo igual que la música; algunos teléfonos
-        // no enrutan el canal de accesibilidad al Bluetooth.
+    /**
+     * Ruta de audio. Por defecto USAGE_MEDIA, que sale por el Bluetooth activo
+     * igual que la música; algunos teléfonos no enrutan el canal de
+     * accesibilidad al Bluetooth. La usan tanto el TTS como el tono de scroll.
+     */
+    private fun buildAudioAttributes(): AudioAttributes {
         val usage = if (VidentePreferences.getAudioOutput(this) == VidentePreferences.AUDIO_OUTPUT_ACCESSIBILITY) {
             AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
         } else {
             AudioAttributes.USAGE_MEDIA
         }
-        engine.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(usage)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
-        )
+        return AudioAttributes.Builder()
+            .setUsage(usage)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+    }
+
+    private fun applyPreferences(engine: TextToSpeech) {
+        engine.setAudioAttributes(buildAudioAttributes())
 
         engine.setSpeechRate(VidentePreferences.getRate(this))
         engine.setPitch(VidentePreferences.getPitch(this))
@@ -177,6 +187,7 @@ class VidenteAccessibilityService :
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         tts?.let { applyPreferences(it) }
+        refreshScrollFeedback()
 
         if (key == VidentePreferences.KEY_TUTORIAL_REQUESTED &&
             VidentePreferences.isTutorialRequested(this)
@@ -190,6 +201,7 @@ class VidenteAccessibilityService :
         super.onServiceConnected()
         Log.i(TAG, "Vidente conectado")
         refreshImePackages()
+        refreshScrollFeedback()
         showFloatingButton()
 
         // Tutorial de bienvenida la primera vez que se activa el servicio.
@@ -264,11 +276,11 @@ class VidenteAccessibilityService :
     }
 
     /**
-     * P8c: al desplazarse por una lista, anuncia la posición una sola vez,
-     * cuando el scroll se detiene (retardo con un único Runnable). Dice
-     * "elemento X de Y" si el nodo expone índices y total, o un porcentaje si
-     * expone posición y máximo; si no hay ningún dato, no dice nada. No repite
-     * el mismo anuncio. Siempre avisa al llegar al principio o al final.
+     * P8c: al desplazarse por una lista, avisa la posición una sola vez, al
+     * detenerse el scroll (un único Runnable con retardo). El principio y el
+     * final se dicen siempre en voz. La posición intermedia va como tono
+     * (grave->agudo) o como porcentaje hablado, según Ajustes; si el nodo no
+     * expone ningún dato de posición, no avisa nada.
      */
     private fun handleScrolled(event: AccessibilityEvent) {
         if (continuousReading && !continuousPaused) return
@@ -286,26 +298,100 @@ class VidenteAccessibilityService :
         val atEnd = (itemCount > 0 && toIndex >= 0 && toIndex == itemCount - 1) ||
             (maxScrollY > 0 && scrollY >= maxScrollY) || (maxScrollX > 0 && scrollX >= maxScrollX)
 
-        val position = when {
+        // Fracción 0..1 de avance en la lista, si se puede calcular.
+        val fraction: Float? = when {
+            itemCount > 1 && fromIndex >= 0 -> fromIndex.toFloat() / (itemCount - 1)
+            maxScrollY > 0 && scrollY >= 0 -> scrollY.toFloat() / maxScrollY
+            maxScrollX > 0 && scrollX >= 0 -> scrollX.toFloat() / maxScrollX
+            else -> null
+        }
+        val spokenPosition = when {
             itemCount > 0 && fromIndex >= 0 -> "elemento ${fromIndex + 1} de $itemCount"
-            maxScrollY > 0 && scrollY >= 0 -> "${scrollY * 100 / maxScrollY} por ciento"
-            maxScrollX > 0 && scrollX >= 0 -> "${scrollX * 100 / maxScrollX} por ciento"
+            fraction != null -> "${(fraction * 100).toInt()} por ciento"
             else -> null
         }
 
         pendingScrollRunnable?.let { mainHandler.removeCallbacks(it) }
         val r = Runnable {
-            val out = when {
-                atEnd -> "Final de la lista"
-                atStart -> "Principio de la lista"
-                else -> position
-            } ?: return@Runnable
-            if (out == lastScrollAnnouncement) return@Runnable
-            lastScrollAnnouncement = out
-            speak(out)
+            when {
+                atEnd -> if (lastScrollAnnouncement != "fin") {
+                    lastScrollAnnouncement = "fin"
+                    speak("Final de la lista")
+                }
+                atStart -> if (lastScrollAnnouncement != "inicio") {
+                    lastScrollAnnouncement = "inicio"
+                    speak("Principio de la lista")
+                }
+                fraction != null && scrollFeedbackTone -> {
+                    lastScrollAnnouncement = null
+                    playScrollTone(fraction)
+                }
+                spokenPosition != null && spokenPosition != lastScrollAnnouncement -> {
+                    lastScrollAnnouncement = spokenPosition
+                    speak(spokenPosition)
+                }
+            }
         }
         pendingScrollRunnable = r
         mainHandler.postDelayed(r, SCROLL_SETTLE_MS)
+    }
+
+    /**
+     * Tono breve de posición de scroll. Frecuencia de SCROLL_TONE_MIN_HZ
+     * (principio) a SCROLL_TONE_MAX_HZ (final). Onda sinusoidal generada al
+     * vuelo, con AudioTrack, por la misma ruta de audio que la voz.
+     */
+    private fun playScrollTone(fraction: Float) {
+        scrollToneTrack?.let { old ->
+            try { old.pause(); old.flush(); old.release() } catch (_: Exception) {}
+        }
+        scrollToneTrack = null
+
+        val f = fraction.coerceIn(0f, 1f)
+        val freq = SCROLL_TONE_MIN_HZ + (SCROLL_TONE_MAX_HZ - SCROLL_TONE_MIN_HZ) * f
+        try {
+            val sampleRate = 22050
+            val n = sampleRate * SCROLL_TONE_MS / 1000
+            val fade = n / 8
+            val buf = ShortArray(n)
+            for (i in 0 until n) {
+                val env = when {
+                    i < fade -> i.toFloat() / fade
+                    i > n - fade -> (n - i).toFloat() / fade
+                    else -> 1f
+                }
+                val s = Math.sin(2.0 * Math.PI * freq * i / sampleRate)
+                buf[i] = (s * env * 0.5 * Short.MAX_VALUE).toInt().toShort()
+            }
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(buildAudioAttributes())
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(n * 2)
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
+            track.write(buf, 0, n)
+            track.play()
+            scrollToneTrack = track
+            mainHandler.postDelayed({
+                if (scrollToneTrack === track) {
+                    try { track.release() } catch (_: Exception) {}
+                    scrollToneTrack = null
+                }
+            }, SCROLL_TONE_MS.toLong() + 120)
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo reproducir el tono de scroll", e)
+        }
+    }
+
+    private fun refreshScrollFeedback() {
+        scrollFeedbackTone =
+            VidentePreferences.getScrollFeedback(this) == VidentePreferences.SCROLL_FEEDBACK_TONE
     }
 
     /**
@@ -1404,6 +1490,8 @@ class VidenteAccessibilityService :
     override fun onDestroy() {
         VidentePreferences.prefs(this).unregisterOnSharedPreferenceChangeListener(this)
         mainHandler.removeCallbacksAndMessages(null)
+        scrollToneTrack?.let { try { it.release() } catch (_: Exception) {} }
+        scrollToneTrack = null
         hideFloatingButton()
         tts?.stop()
         tts?.shutdown()
@@ -1438,6 +1526,9 @@ class VidenteAccessibilityService :
         private const val WINDOW_TITLE_DEBOUNCE_MS = 300L
         private const val KEYBOARD_DEBOUNCE_MS = 350L
         private const val SCROLL_SETTLE_MS = 400L
+        private const val SCROLL_TONE_MS = 140
+        private const val SCROLL_TONE_MIN_HZ = 300f
+        private const val SCROLL_TONE_MAX_HZ = 1400f
         private const val DIALOG_MAX_CHARS = 400
         private const val DIALOG_MAX_PARTS = 12
         // Firma de diálogo: 1-3 botones y árbol pequeño.

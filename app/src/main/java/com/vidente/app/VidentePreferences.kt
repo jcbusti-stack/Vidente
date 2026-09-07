@@ -24,6 +24,12 @@ object VidentePreferences {
     const val AUDIO_OUTPUT_ACCESSIBILITY = "accessibility"
     const val DEFAULT_AUDIO_OUTPUT = AUDIO_OUTPUT_MEDIA
 
+    // Aviso de posición al hacer scroll (P8c): tono variable o porcentaje hablado.
+    const val KEY_SCROLL_FEEDBACK = "scroll_feedback"
+    const val SCROLL_FEEDBACK_TONE = "tone"
+    const val SCROLL_FEEDBACK_VOICE = "voice"
+    const val DEFAULT_SCROLL_FEEDBACK = SCROLL_FEEDBACK_TONE
+
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
     const val MIN_RATE = 0.5f
@@ -93,6 +99,13 @@ object VidentePreferences {
 
     fun setAudioOutput(context: Context, value: String) {
         prefs(context).edit().putString(KEY_AUDIO_OUTPUT, value).apply()
+    }
+
+    fun getScrollFeedback(context: Context): String =
+        prefs(context).getString(KEY_SCROLL_FEEDBACK, DEFAULT_SCROLL_FEEDBACK) ?: DEFAULT_SCROLL_FEEDBACK
+
+    fun setScrollFeedback(context: Context, value: String) {
+        prefs(context).edit().putString(KEY_SCROLL_FEEDBACK, value).apply()
     }
 
     /**

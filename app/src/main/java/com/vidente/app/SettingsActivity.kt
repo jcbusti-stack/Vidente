@@ -28,10 +28,15 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var textPitchValue: TextView
     private lateinit var spinnerVoice: Spinner
     private lateinit var spinnerAudioOutput: Spinner
+    private lateinit var spinnerScrollFeedback: Spinner
 
     private val audioOutputValues = listOf(
         VidentePreferences.AUDIO_OUTPUT_MEDIA,
         VidentePreferences.AUDIO_OUTPUT_ACCESSIBILITY
+    )
+    private val scrollFeedbackValues = listOf(
+        VidentePreferences.SCROLL_FEEDBACK_TONE,
+        VidentePreferences.SCROLL_FEEDBACK_VOICE
     )
 
     private var currentRate = VidentePreferences.DEFAULT_RATE
@@ -47,6 +52,7 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         textPitchValue = findViewById(R.id.textPitchValue)
         spinnerVoice = findViewById(R.id.spinnerVoice)
         spinnerAudioOutput = findViewById(R.id.spinnerAudioOutput)
+        spinnerScrollFeedback = findViewById(R.id.spinnerScrollFeedback)
 
         currentRate = VidentePreferences.getRate(this)
         currentPitch = VidentePreferences.getPitch(this)
@@ -54,6 +60,7 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         setUpRateSeekBar()
         setUpPitchSeekBar()
         setUpAudioOutputSpinner()
+        setUpScrollFeedbackSpinner()
 
         findViewById<Button>(R.id.buttonPreview).setOnClickListener { previewVoice() }
         findViewById<Button>(R.id.buttonReset).setOnClickListener { resetToDefaults() }
@@ -124,6 +131,26 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
                 VidentePreferences.setAudioOutput(this@SettingsActivity, audioOutputValues[position])
                 applyAudioOutputToTts()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+    }
+
+    private fun setUpScrollFeedbackSpinner() {
+        val labels = listOf(
+            getString(R.string.settings_scroll_feedback_tone),
+            getString(R.string.settings_scroll_feedback_voice)
+        )
+        spinnerScrollFeedback.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+
+        val saved = VidentePreferences.getScrollFeedback(this)
+        spinnerScrollFeedback.setSelection(scrollFeedbackValues.indexOf(saved).coerceAtLeast(0))
+
+        spinnerScrollFeedback.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                VidentePreferences.setScrollFeedback(this@SettingsActivity, scrollFeedbackValues[position])
             }
 
             override fun onNothingSelected(parent: AdapterView<*>) {}
@@ -226,6 +253,7 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         VidentePreferences.setPitch(this, currentPitch)
         VidentePreferences.setVoiceName(this, null)
         VidentePreferences.setAudioOutput(this, VidentePreferences.DEFAULT_AUDIO_OUTPUT)
+        VidentePreferences.setScrollFeedback(this, VidentePreferences.DEFAULT_SCROLL_FEEDBACK)
         applyAudioOutputToTts()
 
         seekRate.progress = rateToProgress(currentRate)
@@ -234,6 +262,7 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         updatePitchLabel(currentPitch)
         spinnerVoice.setSelection(0)
         spinnerAudioOutput.setSelection(audioOutputValues.indexOf(VidentePreferences.DEFAULT_AUDIO_OUTPUT).coerceAtLeast(0))
+        spinnerScrollFeedback.setSelection(scrollFeedbackValues.indexOf(VidentePreferences.DEFAULT_SCROLL_FEEDBACK).coerceAtLeast(0))
     }
 
     override fun onDestroy() {
