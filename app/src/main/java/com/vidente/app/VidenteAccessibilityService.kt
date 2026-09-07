@@ -228,30 +228,21 @@ class VidenteAccessibilityService :
     private fun diagLogEvent(event: AccessibilityEvent) {
         val name = when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> "WINDOW_STATE_CHANGED"
-            AccessibilityEvent.TYPE_VIEW_SCROLLED -> "VIEW_SCROLLED"
             AccessibilityEvent.TYPE_ANNOUNCEMENT -> "ANNOUNCEMENT"
-            AccessibilityEvent.TYPE_VIEW_SELECTED -> "VIEW_SELECTED"
             else -> return
         }
-        Log.d(
-            DIAG_TAG,
-            "$name pkg=${event.packageName} cls=${event.className} text=${event.text} " +
-                "from=${event.fromIndex} to=${event.toIndex} count=${event.itemCount}"
-        )
+        Log.d(DIAG_TAG, "$name pkg=${event.packageName} cls=${event.className} text=${event.text}")
     }
 
     /**
      * P8a: anuncio del título de la pantalla nueva.
      *
-     * BUILD DE DIAGNÓSTICO (DIAG_MODE = true): en vez de anunciar el título,
-     * Vidente narra en voz qué trae cada evento de cambio de ventana (texto
-     * del evento, título de la ventana activa, nombre de la aplicación). Sirve
-     * para averiguar de qué campo hay que leer el título en cada app. Cuando
-     * sepamos eso, se pone DIAG_MODE = false y queda el anuncio normal.
-     *
-     * Todo el trabajo que toca getWindows() o el PackageManager va dentro del
-     * Runnable diferido (fuera de la ruta síncrona del evento) y envuelto en
-     * try/catch, para que nada de esto pueda tumbar el servicio.
+     * BUILD DE DIAGNÓSTICO 2 (DIAG_MODE = true): Vidente narra en voz qué trae
+     * cada evento de cambio de ventana. Respecto a la build anterior se ha
+     * QUITADO toda llamada a getWindows(), que se sospecha que competía con el
+     * despacho de gestos y acciones (los gestos se anunciaban pero no se
+     * ejecutaban). Ahora solo se usa el texto del evento y el nombre de la
+     * aplicación (PackageManager), y con más retardo.
      */
     private fun handleWindowTitle(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString()
@@ -273,34 +264,18 @@ class VidenteAccessibilityService :
     }
 
     private fun resolveAndAnnounceTitle(pkg: String?, cls: String?, fromEvent: String?) {
-        val winTitle = activeWindowTitle()
         val app = appLabel(pkg)
-        val title = fromEvent ?: winTitle ?: app
-
-        Log.d(
-            TAG,
-            "P8a titulo: evento='$fromEvent' ventana='$winTitle' app='$app' clase='$cls' -> '$title'"
-        )
+        Log.d(TAG, "P8a titulo: evento='$fromEvent' app='$app' clase='$cls'")
 
         if (DIAG_MODE) {
-            speak(
-                "Ventana. Texto: ${fromEvent ?: "vacío"}. " +
-                    "Título de ventana: ${winTitle ?: "ninguno"}. " +
-                    "Aplicación: ${app ?: "ninguna"}."
-            )
+            speak("Ventana. Texto: ${fromEvent ?: "vacío"}. Aplicación: ${app ?: "ninguna"}.")
             return
         }
 
+        val title = fromEvent ?: app
         if (title.isNullOrBlank() || title == lastWindowTitle) return
         lastWindowTitle = title
         speak(title)
-    }
-
-    private fun activeWindowTitle(): String? = try {
-        windows.firstOrNull { it.isActive }?.title?.toString()?.trim()?.takeIf { it.isNotBlank() }
-    } catch (e: Exception) {
-        Log.w(TAG, "P8a: getWindows() falló al buscar el título de la ventana activa", e)
-        null
     }
 
     private fun appLabel(pkg: String?): String? {
@@ -1175,7 +1150,7 @@ class VidenteAccessibilityService :
         private const val BOUNDARY_START = "Principio de la pantalla"
         private const val BOUNDARY_END = "Final de la pantalla"
 
-        private const val WINDOW_TITLE_DEBOUNCE_MS = 150L
+        private const val WINDOW_TITLE_DEBOUNCE_MS = 500L
 
         // Build de diagnóstico de P8a: Vidente narra qué trae cada evento de
         // cambio de ventana y registra en Logcat los eventos candidatos.
