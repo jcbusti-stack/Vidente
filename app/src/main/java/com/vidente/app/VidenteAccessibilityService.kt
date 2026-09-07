@@ -9,6 +9,9 @@ import android.graphics.PixelFormat
 import android.media.AudioAttributes
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -38,7 +41,7 @@ class VidenteAccessibilityService :
     // próxima lectura de elemento tras envolver en la navegación lineal (P5).
     private var boundaryAnnouncement: String? = null
 
-    private enum class TutorialStep { NONE, EXPLORE, DOUBLE_TAP, NAVIGATE, SYSTEM }
+    private enum class TutorialStep { NONE, EXPLORE, DOUBLE_TAP, NAVIGATE, SYSTEM, READING, MODES }
     private var tutorialStep = TutorialStep.NONE
     private val practicedGestures = mutableSetOf<Int>()
     private var pendingTutorial = false
@@ -50,6 +53,35 @@ class VidenteAccessibilityService :
     private val NAVIGATE_GESTURES = listOf(GESTURE_SWIPE_RIGHT, GESTURE_SWIPE_LEFT)
     private val SYSTEM_GESTURES =
         listOf(GESTURE_SWIPE_UP, GESTURE_SWIPE_DOWN_AND_LEFT, GESTURE_SWIPE_DOWN_AND_RIGHT)
+    private val READING_GESTURES = listOf(GESTURE_SWIPE_DOWN_AND_UP, GESTURE_SWIPE_UP_AND_DOWN)
+
+    // ---- Lectura continua (P6) ----
+    private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile private var continuousReading = false
+    @Volatile private var continuousPaused = false
+    private var continuousLines: List<String> = emptyList()
+    private var continuousIndex = 0
+    private var continuousStartedAt = 0L
+
+    // ---- Navegación granular y por tipo (P7) ----
+    private enum class NavMode(val label: String) {
+        ELEMENT("elemento"),
+        CHARACTER("carácter"),
+        WORD("palabra"),
+        LINE("línea"),
+        PARAGRAPH("párrafo"),
+        HEADING("encabezados"),
+        LINK("enlaces"),
+        CONTROL("controles"),
+        FIELD("campos")
+    }
+    private var navMode = NavMode.ELEMENT
+
+    // Antirebote solo para los gestos que alternan estado o ciclan (no para
+    // deslizar derecha/izquierda, que se encadenan a propósito). Reduce que un
+    // único trazo tembloroso cuente dos veces.
+    private var lastDebouncedGestureId = -1
+    private var lastDebouncedGestureAt = 0L
 
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
@@ -86,13 +118,18 @@ class VidenteAccessibilityService :
 
             override fun onDone(utteranceId: String?) {
                 if (utteranceId == TUTORIAL_UTTERANCE_ID) tutorialInputEnabled = true
+                if (utteranceId == CONTINUOUS_UTTERANCE_ID) onContinuousUtteranceDone()
             }
 
             // Firma obligatoria de la clase abstracta. Reactivamos la práctica
             // igual que en onDone para no dejar el tutorial bloqueado si una
-            // locución falla.
+            // locución falla, y cortamos la lectura continua si su locución
+            // falla para no quedar en un estado a medias.
             override fun onError(utteranceId: String?) {
                 if (utteranceId == TUTORIAL_UTTERANCE_ID) tutorialInputEnabled = true
+                if (utteranceId == CONTINUOUS_UTTERANCE_ID) {
+                    mainHandler.post { stopContinuousReading() }
+                }
             }
         })
 
@@ -147,16 +184,24 @@ class VidenteAccessibilityService :
             AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED,
             AccessibilityEvent.TYPE_VIEW_HOVER_ENTER -> handleFocusEvent(event)
 
+            // Al recorrer texto por carácter, palabra, línea o párrafo (P7) el
+            // sistema no lee el fragmento: lo lee Vidente a partir de este evento.
+            AccessibilityEvent.TYPE_VIEW_TEXT_TRAVERSED_AT_MOVEMENT_GRANULARITY ->
+                handleTextTraversed(event)
+
             // En Android 10 o menos el doble toque del tutorial no llega como
             // gesto, pero el sistema lo convierte en un click: lo usamos como
             // señal de que el usuario practicó el paso de "activar".
             AccessibilityEvent.TYPE_VIEW_CLICKED ->
                 if (tutorialStep == TutorialStep.DOUBLE_TAP) onDoubleTapPracticed()
 
-            // Base para P8: cambios de pantalla y ventana, diálogos, escritura,
-            // scroll, selección y anuncios de la app. Por ahora solo se
-            // reciben; el anuncio hablado de cada uno se implementa en P8.
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            // Pantalla o diálogo nuevo: la lista de lectura continua y el modo
+            // de navegación granular dejan de tener sentido; se reinician sin
+            // anunciar nada (el anuncio del cambio de pantalla es P8).
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> onScreenChanged()
+
+            // Base para P8: contenido de ventana, escritura, scroll, selección
+            // y anuncios de la app. Por ahora solo se reciben.
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_SCROLLED,
@@ -167,11 +212,26 @@ class VidenteAccessibilityService :
         }
     }
 
+    private fun onScreenChanged() {
+        stopContinuousReading()
+        navMode = NavMode.ELEMENT
+    }
+
     /** Lectura hablada del elemento que recibe el foco o el toque. */
     private fun handleFocusEvent(event: AccessibilityEvent) {
         // Durante el tutorial no se lee nada hasta que termina la instrucción
         // hablada; así el primer paso no se completa solo al arrancar.
         if (tutorialStep != TutorialStep.NONE && !tutorialInputEnabled) return
+
+        // Un toque en la pantalla mientras hay lectura continua activa la pausa
+        // (P6). Se ignora la ventana inmediatamente posterior al inicio para
+        // que el final del propio gesto de arranque no la corte.
+        if (continuousReading && !continuousPaused) {
+            if (SystemClock.uptimeMillis() - continuousStartedAt >= CONTINUOUS_START_GUARD_MS) {
+                pauseContinuousReading()
+            }
+            return
+        }
 
         val node = event.source ?: return
         val text = describeForSpeech(node)
@@ -426,39 +486,62 @@ class VidenteAccessibilityService :
         return "[$role] $label"
     }
 
-    // ---- Reparto de gestos (P5, Opción 1) ----
+    // ---- Reparto de gestos (P5 Opción 1, P6, P7) ----
 
     /**
      * Reparto de gestos de un dedo:
      *
-     *   Deslizar a la derecha            -> elemento siguiente (P5)
-     *   Deslizar a la izquierda          -> elemento anterior  (P5)
+     *   Deslizar a la derecha            -> siguiente, según el modo activo (P5/P7)
+     *   Deslizar a la izquierda          -> anterior, según el modo activo (P5/P7)
      *   Deslizar hacia arriba            -> Inicio
+     *   Deslizar hacia abajo             -> cambiar de modo de navegación (P7)
+     *   Deslizar abajo y volver arriba   -> iniciar/reanudar lectura continua (P6)
+     *   Deslizar arriba y volver abajo   -> repetir la última frase (P6)
      *   Deslizar abajo y luego izquierda -> Atrás
      *   Deslizar abajo y luego derecha   -> Recientes
-     *   Deslizar hacia abajo             -> libre (reservado para P7)
+     *   Un toque durante la lectura continua -> pausa (P6)
      *
-     * Siguiente/anterior van en el gesto más fácil y en el mismo sentido que
-     * en el resto de lectores de pantalla. Atrás y Recientes pasan a gestos en
-     * ángulo para dejar libres los deslizamientos horizontales.
-     *
-     * El doble toque (P4) activa el elemento enfocado con un ACTION_CLICK
-     * explícito sobre el ancestro clickeable más cercano. GESTURE_DOUBLE_TAP
-     * solo existe desde API 30; en versiones anteriores se conserva el
-     * comportamiento por defecto del sistema. Los botones del sistema viven en
-     * com.android.systemui y no responden a ACTION_CLICK: la vía correcta es
-     * performGlobalAction.
+     * La clasificación de cada trazo la hace el sistema, no Vidente; no se
+     * puede ajustar su tolerancia desde un servicio de accesibilidad sin
+     * asumir todo el manejo táctil. Para reducir confusiones se aplica un
+     * antirebote a los gestos que alternan estado o ciclan, se ignora la
+     * ventana justo después de arrancar la lectura continua, y cualquier gesto
+     * durante la lectura continua solo la pausa (no ejecuta su acción). Cambiar
+     * de modo se anuncia siempre, así un ciclo accidental se deshace ciclando.
      */
     override fun onGesture(gestureId: Int): Boolean {
         if (tutorialStep != TutorialStep.NONE) return handleTutorialGesture(gestureId)
+
+        // Con lectura continua en marcha, el primer gesto solo la pausa.
+        if (continuousReading && !continuousPaused) {
+            if (SystemClock.uptimeMillis() - continuousStartedAt >= CONTINUOUS_START_GUARD_MS) {
+                pauseContinuousReading()
+            }
+            return true
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && gestureId == GESTURE_DOUBLE_TAP) {
             return activateFocusedElement()
         }
 
         when (gestureId) {
-            GESTURE_SWIPE_RIGHT -> return moveAccessibilityFocus(forward = true)
-            GESTURE_SWIPE_LEFT -> return moveAccessibilityFocus(forward = false)
+            GESTURE_SWIPE_DOWN_AND_UP -> {
+                if (isDebounced(gestureId)) return true
+                startOrResumeContinuousReading()
+                return true
+            }
+            GESTURE_SWIPE_UP_AND_DOWN -> {
+                if (isDebounced(gestureId)) return true
+                repeatLastPhrase()
+                return true
+            }
+            GESTURE_SWIPE_DOWN -> {
+                if (isDebounced(gestureId)) return true
+                cycleNavMode()
+                return true
+            }
+            GESTURE_SWIPE_RIGHT -> return moveInMode(forward = true)
+            GESTURE_SWIPE_LEFT -> return moveInMode(forward = false)
         }
 
         val (action, spoken) = when (gestureId) {
@@ -471,6 +554,262 @@ class VidenteAccessibilityService :
         val done = performGlobalAction(action)
         if (done && ttsReady) speak(spoken)
         return done
+    }
+
+    private fun isDebounced(gestureId: Int): Boolean {
+        val now = SystemClock.uptimeMillis()
+        if (gestureId == lastDebouncedGestureId && now - lastDebouncedGestureAt < GESTURE_DEBOUNCE_MS) {
+            return true
+        }
+        lastDebouncedGestureId = gestureId
+        lastDebouncedGestureAt = now
+        return false
+    }
+
+    // ---- P6: lectura continua ----
+
+    private fun startOrResumeContinuousReading() {
+        if (continuousReading && continuousPaused) {
+            continuousPaused = false
+            continuousStartedAt = SystemClock.uptimeMillis()
+            speakContinuousCurrent()
+            return
+        }
+        if (continuousReading) return
+
+        val root = rootInActiveWindow ?: return
+        val nodes = collectNavigable(root)
+        root.recycle()
+        if (nodes.isEmpty()) return
+
+        val focusedIdx = nodes.indexOfFirst { it.isAccessibilityFocused }
+        val start = if (focusedIdx >= 0) focusedIdx else 0
+        continuousLines = nodes.drop(start).mapNotNull { describeForSpeech(it) }
+        nodes.forEach { it.recycle() }
+        if (continuousLines.isEmpty()) return
+
+        continuousIndex = 0
+        continuousReading = true
+        continuousPaused = false
+        continuousStartedAt = SystemClock.uptimeMillis()
+        speakContinuousCurrent()
+    }
+
+    private fun speakContinuousCurrent() {
+        val text = continuousLines.getOrNull(continuousIndex)
+        if (text == null) {
+            finishContinuousReading()
+            return
+        }
+        lastSpoken = text
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, CONTINUOUS_UTTERANCE_ID)
+    }
+
+    private fun onContinuousUtteranceDone() {
+        mainHandler.post {
+            if (!continuousReading || continuousPaused) return@post
+            continuousIndex++
+            if (continuousIndex >= continuousLines.size) {
+                finishContinuousReading()
+            } else {
+                speakContinuousCurrent()
+            }
+        }
+    }
+
+    private fun pauseContinuousReading() {
+        if (!continuousReading || continuousPaused) return
+        continuousPaused = true
+        tts?.stop()
+        speak("Pausa")
+    }
+
+    private fun stopContinuousReading() {
+        if (!continuousReading) return
+        continuousReading = false
+        continuousPaused = false
+        continuousLines = emptyList()
+        continuousIndex = 0
+        tts?.stop()
+    }
+
+    private fun finishContinuousReading() {
+        continuousReading = false
+        continuousPaused = false
+        continuousLines = emptyList()
+        continuousIndex = 0
+        speak("Fin de la lectura")
+    }
+
+    private fun repeatLastPhrase() {
+        val last = lastSpoken ?: return
+        speak(last)
+    }
+
+    // ---- P7: navegación granular y por tipo ----
+
+    private fun cycleNavMode() {
+        val values = NavMode.values()
+        navMode = values[(navMode.ordinal + 1) % values.size]
+        speak(navMode.label)
+    }
+
+    private fun moveInMode(forward: Boolean): Boolean = when (navMode) {
+        NavMode.ELEMENT -> moveAccessibilityFocus(forward)
+        NavMode.CHARACTER -> moveByGranularity(AccessibilityNodeInfo.MOVEMENT_GRANULARITY_CHARACTER, forward)
+        NavMode.WORD -> moveByGranularity(AccessibilityNodeInfo.MOVEMENT_GRANULARITY_WORD, forward)
+        NavMode.LINE -> moveByGranularity(AccessibilityNodeInfo.MOVEMENT_GRANULARITY_LINE, forward)
+        NavMode.PARAGRAPH -> moveByGranularity(AccessibilityNodeInfo.MOVEMENT_GRANULARITY_PARAGRAPH, forward)
+        NavMode.HEADING, NavMode.LINK, NavMode.CONTROL, NavMode.FIELD -> moveToType(navMode, forward)
+    }
+
+    /**
+     * Recorre el texto del elemento enfocado por carácter, palabra, línea o
+     * párrafo. El fragmento recorrido lo anuncia handleTextTraversed a partir
+     * del evento que dispara la acción.
+     */
+    private fun moveByGranularity(granularity: Int, forward: Boolean): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        root.recycle()
+        focused ?: return false
+
+        val supported = (focused.movementGranularities and granularity) != 0
+        if (!supported) {
+            focused.recycle()
+            speak("Aquí no hay texto para recorrer")
+            return false
+        }
+
+        val args = Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_MOVEMENT_GRANULARITY_INT, granularity)
+            putBoolean(AccessibilityNodeInfo.ACTION_ARGUMENT_EXTEND_SELECTION_BOOLEAN, false)
+        }
+        val action = if (forward) {
+            AccessibilityNodeInfo.ACTION_NEXT_AT_MOVEMENT_GRANULARITY
+        } else {
+            AccessibilityNodeInfo.ACTION_PREVIOUS_AT_MOVEMENT_GRANULARITY
+        }
+        val done = focused.performAction(action, args)
+        focused.recycle()
+        if (!done) speak(if (forward) "Final del texto" else "Principio del texto")
+        return done
+    }
+
+    private fun handleTextTraversed(event: AccessibilityEvent) {
+        val full = event.text?.joinToString("") ?: return
+        val from = event.fromIndex
+        val to = event.toIndex
+        if (from < 0 || to <= from || to > full.length) return
+        val piece = full.substring(from, to)
+        if (piece.isNotBlank()) {
+            lastSpoken = piece
+            speak(piece)
+        }
+    }
+
+    /**
+     * Salta al siguiente o anterior nodo visible de un tipo dado (encabezado,
+     * enlace, control o campo) en orden de lectura, partiendo del elemento
+     * enfocado. El nodo destino se anuncia por su evento de foco.
+     */
+    private fun moveToType(mode: NavMode, forward: Boolean): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val all = collectAllNodes(root)
+        root.recycle()
+        if (all.isEmpty()) return false
+
+        val anchor = all.indexOfFirst { it.isAccessibilityFocused }
+        val n = all.size
+        var found = -1
+        var crossed = false
+
+        if (anchor < 0) {
+            val range = if (forward) 0 until n else (n - 1) downTo 0
+            for (i in range) {
+                if (matchesType(all[i], mode)) { found = i; break }
+            }
+        } else {
+            val step = if (forward) 1 else -1
+            var i = anchor
+            for (k in 1 until n) {
+                val next = i + step
+                if (next < 0 || next >= n) crossed = true
+                i = (next % n + n) % n
+                if (matchesType(all[i], mode)) { found = i; break }
+            }
+        }
+
+        val result = if (found >= 0) {
+            val ok = all[found].performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+            if (ok && crossed) {
+                boundaryAnnouncement = if (forward) BOUNDARY_START else BOUNDARY_END
+            }
+            ok
+        } else {
+            speak("No hay ${mode.label} en la pantalla")
+            false
+        }
+        all.forEach { it.recycle() }
+        return result
+    }
+
+    private fun matchesType(node: AccessibilityNodeInfo, mode: NavMode): Boolean {
+        if (!node.isVisibleToUser) return false
+        return when (mode) {
+            NavMode.HEADING -> isHeadingNode(node)
+            NavMode.LINK -> isLinkNode(node)
+            NavMode.CONTROL -> isControlNode(node)
+            NavMode.FIELD -> node.isEditable ||
+                node.className?.toString()?.endsWith("EditText") == true
+            else -> false
+        }
+    }
+
+    private fun isHeadingNode(node: AccessibilityNodeInfo): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            node.isHeading
+        } else {
+            node.collectionItemInfo?.isHeading == true
+        }
+
+    private fun isLinkNode(node: AccessibilityNodeInfo): Boolean {
+        if (!node.isClickable) return false
+        val cn = node.className?.toString() ?: return false
+        // Enlaces de texto en apps nativas y en WebView (donde suelen llegar
+        // como android.view.View clickeable).
+        return cn.endsWith("TextView") || cn == "android.view.View" || cn.contains("Link", ignoreCase = true)
+    }
+
+    private fun isControlNode(node: AccessibilityNodeInfo): Boolean {
+        if (node.isEditable) return true
+        val cn = node.className?.toString().orEmpty()
+        if (cn.endsWith("Button") || cn.endsWith("Switch") || cn.endsWith("SwitchCompat") ||
+            cn.endsWith("SwitchMaterial") || cn.endsWith("CheckBox") || cn.endsWith("RadioButton") ||
+            cn.endsWith("SeekBar") || cn.endsWith("Spinner") || cn.endsWith("ToggleButton")
+        ) {
+            return true
+        }
+        return node.isCheckable
+    }
+
+    /** Todos los nodos visibles en orden de lectura, sin filtrar ni colapsar. */
+    @Suppress("DEPRECATION")
+    private fun collectAllNodes(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
+        val out = mutableListOf<AccessibilityNodeInfo>()
+
+        fun walk(node: AccessibilityNodeInfo) {
+            if (out.size >= MAX_ALL_NODES) return
+            if (node.isVisibleToUser) out.add(AccessibilityNodeInfo.obtain(node))
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                walk(child)
+                child.recycle()
+            }
+        }
+
+        walk(root)
+        return out
     }
 
     /**
@@ -612,6 +951,8 @@ class VidenteAccessibilityService :
                 }
             TutorialStep.NAVIGATE -> onNavigatePracticed(gestureId)
             TutorialStep.SYSTEM -> onSystemPracticed(gestureId)
+            TutorialStep.READING -> onReadingPracticed(gestureId)
+            TutorialStep.MODES -> onModesPracticed(gestureId)
             else -> Unit
         }
         return true
@@ -649,10 +990,9 @@ class VidenteAccessibilityService :
         }
 
         if (practicedGestures.containsAll(SYSTEM_GESTURES)) {
-            tutorialStep = TutorialStep.NONE
             practicedGestures.clear()
-            VidentePreferences.setTutorialDone(this, true)
-            speakTutorial("$ok $TUTORIAL_DONE")
+            tutorialStep = TutorialStep.READING
+            speakTutorial("$ok $TUTORIAL_READING $TUTORIAL_READING_FIRST")
             return
         }
 
@@ -665,6 +1005,40 @@ class VidenteAccessibilityService :
                 "Ahora desliza hacia abajo y luego a la derecha para Recientes."
         }
         speakTutorial(if (firstTime) "$ok $next" else next)
+    }
+
+    private fun onReadingPracticed(gestureId: Int) {
+        if (gestureId !in READING_GESTURES) return
+
+        val firstTime = practicedGestures.add(gestureId)
+        val ok = if (gestureId == GESTURE_SWIPE_DOWN_AND_UP) {
+            "Bien, así se empieza a leer de corrido."
+        } else {
+            "Bien, así se repite la última frase."
+        }
+
+        if (practicedGestures.containsAll(READING_GESTURES)) {
+            practicedGestures.clear()
+            tutorialStep = TutorialStep.MODES
+            speakTutorial("$ok $TUTORIAL_MODES $TUTORIAL_MODES_FIRST")
+            return
+        }
+
+        val next = if (GESTURE_SWIPE_DOWN_AND_UP !in practicedGestures) {
+            "Ahora desliza hacia abajo y vuelve arriba sin levantar el dedo, para empezar a leer de corrido."
+        } else {
+            "Ahora desliza hacia arriba y vuelve abajo sin levantar el dedo, para repetir la última frase."
+        }
+        speakTutorial(if (firstTime) "$ok $next" else next)
+    }
+
+    private fun onModesPracticed(gestureId: Int) {
+        if (gestureId != GESTURE_SWIPE_DOWN) return
+
+        tutorialStep = TutorialStep.NONE
+        practicedGestures.clear()
+        VidentePreferences.setTutorialDone(this, true)
+        speakTutorial("Bien, así se cambia de modo. $TUTORIAL_DONE")
     }
 
     override fun onInterrupt() {
@@ -683,6 +1057,7 @@ class VidenteAccessibilityService :
         private const val TAG = "VidenteA11yService"
         private const val UTTERANCE_ID = "vidente_utterance"
         private const val TUTORIAL_UTTERANCE_ID = "vidente_tutorial"
+        private const val CONTINUOUS_UTTERANCE_ID = "vidente_continuo"
         private const val FLOATING_BUTTON_MARGIN_PX = 24
         private const val MAX_DEPTH = 12
         private const val MAX_LABEL_DEPTH = 3
@@ -690,13 +1065,22 @@ class VidenteAccessibilityService :
         private const val MAX_LINES = 60
         private const val MAX_SUMMARY_CHARS = 4000
         private const val MAX_NAV_NODES = 200
+        private const val MAX_ALL_NODES = 500
+
+        // Gestos que alternan estado o ciclan: se ignora una repetición del
+        // mismo gesto dentro de esta ventana.
+        private const val GESTURE_DEBOUNCE_MS = 350L
+        // Tras arrancar la lectura continua se ignoran gestos y toques durante
+        // esta ventana, para que el final del propio gesto de arranque no la
+        // pause de inmediato.
+        private const val CONTINUOUS_START_GUARD_MS = 700L
 
         private const val BOUNDARY_START = "Principio de la pantalla"
         private const val BOUNDARY_END = "Final de la pantalla"
 
         // ---- Textos del tutorial de bienvenida (P21) ----
         private const val TUTORIAL_INTRO =
-            "Bienvenido a Vidente. Vamos a practicar los cuatro gestos básicos. " +
+            "Bienvenido a Vidente. Vamos a practicar los gestos, uno a uno. " +
                 "Puedes repetir este tutorial cuando quieras desde Ajustes."
         private const val TUTORIAL_EXPLORE =
             "Primer gesto: explorar. Apoya un dedo en la pantalla y muévelo despacio. " +
@@ -722,11 +1106,23 @@ class VidenteAccessibilityService :
                 "Y hacia abajo y luego a la derecha para Recientes. Vamos a probar los tres."
         private const val TUTORIAL_SYSTEM_FIRST =
             "Empieza deslizando hacia arriba para Inicio."
+        private const val TUTORIAL_READING =
+            "Quinto gesto: leer de corrido. Desliza hacia abajo y vuelve arriba sin levantar " +
+                "el dedo, y Vidente empezará a leer desde donde estás hasta el final. " +
+                "Un toque en la pantalla lo pausa; el mismo gesto de abajo y arriba lo reanuda. " +
+                "Y deslizando hacia arriba y volviendo abajo se repite la última frase. " +
+                "Vamos a probar esos dos."
+        private const val TUTORIAL_READING_FIRST =
+            "Empieza deslizando hacia abajo y volviendo arriba sin levantar el dedo."
+        private const val TUTORIAL_MODES =
+            "Sexto y último gesto: cambiar de modo. Deslizando hacia abajo, recto, se va " +
+                "cambiando entre modos: elemento, carácter, palabra, línea, párrafo, encabezados, " +
+                "enlaces, controles y campos. Vidente dice el modo al cambiar. Luego, deslizar a " +
+                "la derecha o a la izquierda te mueve según el modo elegido."
+        private const val TUTORIAL_MODES_FIRST =
+            "Pruébalo ahora: desliza hacia abajo, recto."
         private const val TUTORIAL_DONE =
-            "El tutorial terminó. Ya conoces los cuatro gestos: explorar con un toque, " +
-                "activar con dos toques, moverte con un dedo a la derecha o a la izquierda, " +
-                "y la barra del sistema deslizando hacia arriba para Inicio o hacia abajo " +
-                "en ángulo para Atrás y Recientes. " +
-                "Puedes repetirlo cuando quieras desde Ajustes, con el botón Repetir tutorial."
+            "El tutorial terminó. Puedes repetirlo cuando quieras desde Ajustes, con el botón " +
+                "Repetir tutorial."
     }
 }
