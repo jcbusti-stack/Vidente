@@ -1,7 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
-const { getUsage, incrementUsage } = require('./usageStore');
+const {
+  initDb,
+  getDeviceUsage,
+  incrementDeviceUsage,
+  logGeminiRequest
+} = require('./usageStore');
 
 const app = express();
 app.use(cors());
@@ -42,7 +47,7 @@ app.post('/ask', askLimiter, async (req, res) => {
     return res.status(500).json({ error: 'El servidor no tiene configurada la clave de Gemini.' });
   }
 
-  const usageBefore = getUsage(deviceId);
+  const usageBefore = await getDeviceUsage(deviceId);
   if (usageBefore.count >= FREE_MONTHLY_LIMIT) {
     return res.status(402).json({
       error: 'limit_reached',
@@ -53,8 +58,21 @@ app.post('/ask', askLimiter, async (req, res) => {
   }
 
   try {
-    const answer = await askGemini(question, typeof screenSummary === 'string' ? screenSummary : '');
-    const usageAfter = incrementUsage(deviceId);
+    const { text: answer, usageMetadata } = await askGemini(
+      question,
+      typeof screenSummary === 'string' ? screenSummary : ''
+    );
+
+    await logGeminiRequest({
+      deviceId,
+      success: true,
+      inputTokens: usageMetadata.promptTokenCount ?? null,
+      outputTokens: usageMetadata.candidatesTokenCount ?? null,
+      totalTokens: usageMetadata.totalTokenCount ?? null,
+      model: GEMINI_MODEL
+    });
+
+    const usageAfter = await incrementDeviceUsage(deviceId);
     res.json({
       answer,
       usage: {
@@ -65,6 +83,12 @@ app.post('/ask', askLimiter, async (req, res) => {
     });
   } catch (error) {
     console.error('Error llamando a Gemini:', error);
+    await logGeminiRequest({
+      deviceId,
+      success: false,
+      model: GEMINI_MODEL,
+      error: String(error && error.message ? error.message : error).slice(0, 500)
+    });
     res.status(502).json({ error: 'No se pudo obtener respuesta de Gemini.' });
   }
 });
@@ -113,9 +137,14 @@ async function askGemini(question, screenSummary) {
   if (!text) {
     throw new Error('Respuesta de Gemini sin texto.');
   }
-  return text.trim();
+  return { text: text.trim(), usageMetadata: data.usageMetadata || {} };
 }
 
-app.listen(PORT, () => {
-  console.log(`Vidente backend escuchando en el puerto ${PORT}`);
-});
+initDb()
+  .then(() => console.log('Base de datos lista.'))
+  .catch((err) => console.error('No se pudo inicializar la base de datos al arrancar:', err))
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`Vidente backend escuchando en el puerto ${PORT}`);
+    });
+  });
