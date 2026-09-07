@@ -4,6 +4,12 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Vidente es un lector de pantalla: necesita ver todos los paquetes para
+         resolver el nombre visible de la app que está en primer plano (P8a).
+         Se distribuye por APK, no por Play Store, así que no aplica la
+         política de declaración de Google Play. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />

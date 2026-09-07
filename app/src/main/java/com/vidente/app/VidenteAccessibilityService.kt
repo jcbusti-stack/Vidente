@@ -288,7 +288,14 @@ class VidenteAccessibilityService :
         pendingTitleRunnable?.let { mainHandler.removeCallbacks(it) }
         val r = Runnable {
             try {
-                val title = fromEvent ?: appLabel(pkg)
+                // En este teléfono event.text del cambio de ventana trae el
+                // paquete o el componente, no un título legible; solo se usa
+                // si de verdad parece un título. Si no, el nombre visible de
+                // la app.
+                val eventTitle = fromEvent?.takeIf {
+                    it != pkg && !it.startsWith("$pkg/") && !it.contains('.')
+                }
+                val title = eventTitle ?: appLabel(pkg)
                 if (!title.isNullOrBlank() && title != lastWindowTitle) {
                     lastWindowTitle = title
                     speak(title)
@@ -301,12 +308,19 @@ class VidenteAccessibilityService :
         mainHandler.postDelayed(r, WINDOW_TITLE_DEBOUNCE_MS)
     }
 
+    /**
+     * Nombre visible de la app a partir del paquete. Requiere que el
+     * manifiesto declare QUERY_ALL_PACKAGES: en Android 11+ sin eso,
+     * getApplicationInfo lanza NameNotFoundException para casi cualquier app
+     * ajena, que era la causa de que "Aplicación" saliera siempre vacío.
+     */
     private fun appLabel(pkg: String?): String? {
         if (pkg.isNullOrBlank()) return null
         return try {
             val pm = packageManager
             pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString().trim().takeIf { it.isNotBlank() }
         } catch (e: Exception) {
+            if (DIAG_MODE) Log.w(TAG, "P8a: appLabel('$pkg') falló", e)
             null
         }
     }
