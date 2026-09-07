@@ -332,9 +332,21 @@ class VidenteAccessibilityService :
         val scrollX = event.scrollX
         val maxScrollX = event.maxScrollX
 
-        val atStart = (itemCount > 0 && fromIndex == 0) ||
+        // La lista solo tiene "principio" y "final" reales si de verdad se
+        // puede desplazar. Si cabe entera en pantalla (primer y último
+        // elemento visibles a la vez, y sin recorrido en píxeles) no es un
+        // borde: es lo que pasa al abrir una carpeta del launcher, que emite
+        // un scroll con la rejilla completa a la vista.
+        val pixelScrollable = maxScrollY > 0 || maxScrollX > 0
+        val wholeListVisible = itemCount > 0 && fromIndex == 0 && toIndex == itemCount - 1
+        if (wholeListVisible && !pixelScrollable) {
+            lastScrollBoundary = null
+            return
+        }
+
+        val atStart = (itemCount > 0 && fromIndex == 0 && toIndex in 0 until itemCount - 1) ||
             (maxScrollY > 0 && scrollY == 0) || (maxScrollX > 0 && scrollX == 0)
-        val atEnd = (itemCount > 0 && toIndex >= 0 && toIndex == itemCount - 1) ||
+        val atEnd = (itemCount > 0 && toIndex == itemCount - 1 && fromIndex > 0) ||
             (maxScrollY > 0 && scrollY >= maxScrollY) || (maxScrollX > 0 && scrollX >= maxScrollX)
 
         if (atEnd || atStart) {
@@ -712,10 +724,21 @@ class VidenteAccessibilityService :
      * hermano (o en un hijo, si el foco cayó sobre la fila que los contiene).
      * Sin esta búsqueda el nodo se descartaba y no se leía nada.
      */
-    private fun findLabel(node: AccessibilityNodeInfo): String? =
-        ownLabel(node)
-            ?: labelFromDescendants(node, depth = 0)
-            ?: labelFromSiblings(node)
+    private fun findLabel(node: AccessibilityNodeInfo): String? {
+        ownLabel(node)?.let { return it }
+
+        // Solo se sintetiza una etiqueta mirando hijos o hermanos cuando el
+        // nodo es una fila o un control (clickable, casilla, Switch, campo…).
+        // Para un contenedor grande sin texto propio —el área de páginas del
+        // launcher, por ejemplo— no se inventa nada: al tocar un hueco vacío,
+        // la búsqueda en descendientes acababa leyendo el texto de un widget
+        // ("Tiempo") que vivía en otra página del mismo contenedor.
+        val synthesises = node.isClickable || node.isCheckable || node.isEditable ||
+            isRecognisedControl(node)
+        if (!synthesises) return null
+
+        return labelFromDescendants(node, depth = 0) ?: labelFromSiblings(node)
+    }
 
     private fun labelFromDescendants(node: AccessibilityNodeInfo, depth: Int): String? {
         if (depth >= MAX_LABEL_DEPTH) return null
