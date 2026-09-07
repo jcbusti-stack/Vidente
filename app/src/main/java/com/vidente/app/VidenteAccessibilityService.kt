@@ -90,13 +90,16 @@ class VidenteAccessibilityService :
     private var pendingTitleRunnable: Runnable? = null
     private var pendingKeyboardRunnable: Runnable? = null
     private var pendingScrollRunnable: Runnable? = null
-    private var lastScrollAnnouncement: String? = null
-    // P8c: aviso de posición al hacer scroll como tono (grave = principio,
-    // agudo = final) en vez de porcentaje hablado. Configurable en Ajustes.
+    private var lastScrollBoundary: String? = null      // "fin" | "inicio" | null
+    private var lastSpokenScrollPos: String? = null     // dedupe del porcentaje hablado
+    // P8c: aviso de posición al hacer scroll como tono continuo (grave =
+    // principio, agudo = final) que sigue al dedo en tiempo real, o como
+    // porcentaje hablado. Configurable en Ajustes.
     private var scrollFeedbackTone = true
     private var soundPool: SoundPool? = null
     private var scrollToneSoundId = 0
     private var scrollToneLoaded = false
+    private var scrollToneStreamId = 0
     // Visibilidad del teclado por heurística (sin getWindows(), que rompía el
     // despacho de gestos): se marca visible al ver eventos de un método de
     // entrada o al enfocar un campo, y oculto al cambiar de pantalla o pulsar
@@ -280,15 +283,17 @@ class VidenteAccessibilityService :
     private fun onScreenChanged() {
         stopContinuousReading()
         navMode = NavMode.ELEMENT
-        lastScrollAnnouncement = null
+        stopScrollTone()
+        lastScrollBoundary = null
+        lastSpokenScrollPos = null
     }
 
     /**
-     * P8c: al desplazarse por una lista, avisa la posición una sola vez, al
-     * detenerse el scroll (un único Runnable con retardo). El principio y el
-     * final se dicen siempre en voz. La posición intermedia va como tono
-     * (grave->agudo) o como porcentaje hablado, según Ajustes; si el nodo no
-     * expone ningún dato de posición, no avisa nada.
+     * P8c: al desplazarse por una lista se acompaña el movimiento en tiempo
+     * real. En modo tono, un pitido CONTINUO en bucle cuya frecuencia sigue a
+     * la posición mientras el dedo arrastra (grave arriba, agudo abajo), y se
+     * apaga poco después de dejar de desplazar. En modo voz, se dice el
+     * porcentaje al detenerse. El principio y el final se dicen siempre en voz.
      */
     private fun handleScrolled(event: AccessibilityEvent) {
         if (continuousReading && !continuousPaused) return
@@ -306,51 +311,53 @@ class VidenteAccessibilityService :
         val atEnd = (itemCount > 0 && toIndex >= 0 && toIndex == itemCount - 1) ||
             (maxScrollY > 0 && scrollY >= maxScrollY) || (maxScrollX > 0 && scrollX >= maxScrollX)
 
-        // Fracción 0..1 de avance en la lista, si se puede calcular.
+        if (atEnd || atStart) {
+            val which = if (atEnd) "fin" else "inicio"
+            if (which != lastScrollBoundary) {
+                lastScrollBoundary = which
+                stopScrollTone()
+                speak(if (atEnd) "Final de la lista" else "Principio de la lista")
+            }
+            return
+        }
+        lastScrollBoundary = null
+
         val fraction: Float? = when {
             itemCount > 1 && fromIndex >= 0 -> fromIndex.toFloat() / (itemCount - 1)
             maxScrollY > 0 && scrollY >= 0 -> scrollY.toFloat() / maxScrollY
             maxScrollX > 0 && scrollX >= 0 -> scrollX.toFloat() / maxScrollX
             else -> null
-        }
-        val spokenPosition = when {
-            itemCount > 0 && fromIndex >= 0 -> "elemento ${fromIndex + 1} de $itemCount"
-            fraction != null -> "${(fraction * 100).toInt()} por ciento"
-            else -> null
-        }
+        } ?: return
 
-        pendingScrollRunnable?.let { mainHandler.removeCallbacks(it) }
-        val r = Runnable {
-            when {
-                atEnd -> if (lastScrollAnnouncement != "fin") {
-                    lastScrollAnnouncement = "fin"
-                    speak("Final de la lista")
-                }
-                atStart -> if (lastScrollAnnouncement != "inicio") {
-                    lastScrollAnnouncement = "inicio"
-                    speak("Principio de la lista")
-                }
-                // Tono si está elegido y el sonido cargó; si no, se habla el
-                // porcentaje como respaldo.
-                fraction != null && scrollFeedbackTone && scrollToneLoaded -> {
-                    lastScrollAnnouncement = "tono"
-                    playScrollTone(fraction)
-                }
-                spokenPosition != null && spokenPosition != lastScrollAnnouncement -> {
-                    lastScrollAnnouncement = spokenPosition
-                    speak(spokenPosition)
+        if (scrollFeedbackTone && scrollToneLoaded) {
+            startOrUpdateScrollTone(fraction)
+            pendingScrollRunnable?.let { mainHandler.removeCallbacks(it) }
+            val stop = Runnable { stopScrollTone() }
+            pendingScrollRunnable = stop
+            mainHandler.postDelayed(stop, SCROLL_TONE_STOP_MS)
+        } else {
+            val pos = if (itemCount > 0 && fromIndex >= 0) {
+                "elemento ${fromIndex + 1} de $itemCount"
+            } else {
+                "${(fraction * 100).toInt()} por ciento"
+            }
+            pendingScrollRunnable?.let { mainHandler.removeCallbacks(it) }
+            val speakPos = Runnable {
+                if (pos != lastSpokenScrollPos) {
+                    lastSpokenScrollPos = pos
+                    speak(pos)
                 }
             }
+            pendingScrollRunnable = speakPos
+            mainHandler.postDelayed(speakPos, SCROLL_SETTLE_MS)
         }
-        pendingScrollRunnable = r
-        mainHandler.postDelayed(r, SCROLL_SETTLE_MS)
     }
 
     /**
-     * SoundPool con un tono base (res/raw/scroll_tone.wav, ~700 Hz). El aviso
-     * de posición se reproduce cambiando la velocidad de reproducción: 0.5x
-     * (grave, principio de la lista) a 2x (agudo, final). SoundPool es fiable
-     * y de baja latencia, a diferencia de generar audio con AudioTrack.
+     * SoundPool con un tono base en bucle (res/raw/scroll_tone.wav, 700 Hz,
+     * longitud de ciclos exactos para que el bucle no chasquee). La posición
+     * se traslada a la velocidad de reproducción: 0.5x (grave, principio) a
+     * 2x (agudo, final). SoundPool es fiable y de baja latencia.
      */
     private fun ensureSoundPool() {
         if (soundPool != null) return
@@ -366,18 +373,31 @@ class VidenteAccessibilityService :
     }
 
     private fun releaseSoundPool() {
+        stopScrollTone()
         soundPool?.release()
         soundPool = null
         scrollToneLoaded = false
         scrollToneSoundId = 0
     }
 
-    private fun playScrollTone(fraction: Float) {
+    private fun rateForFraction(fraction: Float): Float =
+        (0.5f + fraction.coerceIn(0f, 1f) * 1.5f).coerceIn(0.5f, 2.0f)
+
+    private fun startOrUpdateScrollTone(fraction: Float) {
         val sp = soundPool ?: return
-        if (!scrollToneLoaded) return
-        val f = fraction.coerceIn(0f, 1f)
-        val rate = (0.5f + f * 1.5f).coerceIn(0.5f, 2.0f)
-        sp.play(scrollToneSoundId, 0.7f, 0.7f, 1, 0, rate)
+        val rate = rateForFraction(fraction)
+        if (scrollToneStreamId == 0) {
+            scrollToneStreamId = sp.play(scrollToneSoundId, SCROLL_TONE_VOL, SCROLL_TONE_VOL, 1, -1, rate)
+        } else {
+            sp.setRate(scrollToneStreamId, rate)
+        }
+    }
+
+    private fun stopScrollTone() {
+        if (scrollToneStreamId != 0) {
+            soundPool?.stop(scrollToneStreamId)
+            scrollToneStreamId = 0
+        }
     }
 
     private fun refreshScrollFeedback() {
@@ -1516,6 +1536,8 @@ class VidenteAccessibilityService :
         private const val WINDOW_TITLE_DEBOUNCE_MS = 300L
         private const val KEYBOARD_DEBOUNCE_MS = 350L
         private const val SCROLL_SETTLE_MS = 400L
+        private const val SCROLL_TONE_STOP_MS = 250L
+        private const val SCROLL_TONE_VOL = 0.6f
         private const val DIALOG_MAX_CHARS = 400
         private const val DIALOG_MAX_PARTS = 12
         // Firma de diálogo: 1-3 botones y árbol pequeño.
