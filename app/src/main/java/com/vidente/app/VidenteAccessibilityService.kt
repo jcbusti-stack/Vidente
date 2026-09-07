@@ -46,6 +46,11 @@ class VidenteAccessibilityService :
     // próxima lectura de elemento tras envolver en la navegación lineal (P5).
     private var boundaryAnnouncement: String? = null
 
+    // Momento del último cambio de pantalla. Sirve para descartar el evento de
+    // scroll que dispara un contenedor recién abierto (p. ej. una carpeta del
+    // launcher), que llega "al final" sin que el usuario haya desplazado nada.
+    private var lastScreenChangeAt = 0L
+
     private enum class TutorialStep { NONE, EXPLORE, DOUBLE_TAP, NAVIGATE, SYSTEM, READING, MODES }
     private var tutorialStep = TutorialStep.NONE
     private val practicedGestures = mutableSetOf<Int>()
@@ -296,6 +301,9 @@ class VidenteAccessibilityService :
         stopScrollTone()
         lastScrollBoundary = null
         lastSpokenScrollPos = null
+        lastScreenChangeAt = SystemClock.uptimeMillis()
+        // Un aviso de borde pendiente pertenece a la pantalla anterior.
+        boundaryAnnouncement = null
         lastFocusedNode?.recycle()
         lastFocusedNode = null
     }
@@ -309,6 +317,12 @@ class VidenteAccessibilityService :
      */
     private fun handleScrolled(event: AccessibilityEvent) {
         if (continuousReading && !continuousPaused) return
+
+        // Al abrir una pantalla o un contenedor (una carpeta del launcher, un
+        // desplegable) el sistema emite un scroll que suele venir "al final"
+        // aunque el usuario no haya movido nada: eso hacía que Vidente dijera
+        // "Final de la lista" en vez de anunciar lo que se abrió.
+        if (SystemClock.uptimeMillis() - lastScreenChangeAt < SCROLL_AFTER_SCREEN_CHANGE_GUARD_MS) return
 
         val fromIndex = event.fromIndex
         val toIndex = event.toIndex
@@ -1622,6 +1636,7 @@ class VidenteAccessibilityService :
         private const val KEYBOARD_DEBOUNCE_MS = 350L
         private const val SCROLL_SETTLE_MS = 400L
         private const val SCROLL_TONE_STOP_MS = 220L
+        private const val SCROLL_AFTER_SCREEN_CHANGE_GUARD_MS = 700L
         private const val SCROLL_TONE_VOL = 0.55f
         private const val BLIP_INTERVAL_MS = 110L
         private const val DIALOG_MAX_CHARS = 400
