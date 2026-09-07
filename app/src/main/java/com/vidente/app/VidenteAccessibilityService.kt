@@ -109,12 +109,6 @@ class VidenteAccessibilityService :
         }
 
         engine.language = Locale.getDefault()
-        engine.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
-        )
         applyPreferences(engine)
 
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -146,6 +140,21 @@ class VidenteAccessibilityService :
     }
 
     private fun applyPreferences(engine: TextToSpeech) {
+        // La ruta de audio se toma de Ajustes. Por defecto USAGE_MEDIA, que
+        // sale por el Bluetooth activo igual que la música; algunos teléfonos
+        // no enrutan el canal de accesibilidad al Bluetooth.
+        val usage = if (VidentePreferences.getAudioOutput(this) == VidentePreferences.AUDIO_OUTPUT_ACCESSIBILITY) {
+            AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
+        } else {
+            AudioAttributes.USAGE_MEDIA
+        }
+        engine.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(usage)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        )
+
         engine.setSpeechRate(VidentePreferences.getRate(this))
         engine.setPitch(VidentePreferences.getPitch(this))
 

@@ -14,6 +14,15 @@ object VidentePreferences {
     const val KEY_DEVICE_ID = "device_id"
     const val KEY_TUTORIAL_DONE = "tutorial_done"
     const val KEY_TUTORIAL_REQUESTED = "tutorial_requested"
+    const val KEY_AUDIO_OUTPUT = "audio_output"
+
+    // Ruta de audio del TTS. "media" usa USAGE_MEDIA, que sigue la salida
+    // Bluetooth igual que la música; "accessibility" usa
+    // USAGE_ASSISTANCE_ACCESSIBILITY (volumen independiente, suena sobre
+    // llamadas), pero en varios teléfonos no se enruta al Bluetooth.
+    const val AUDIO_OUTPUT_MEDIA = "media"
+    const val AUDIO_OUTPUT_ACCESSIBILITY = "accessibility"
+    const val DEFAULT_AUDIO_OUTPUT = AUDIO_OUTPUT_MEDIA
 
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
@@ -77,6 +86,13 @@ object VidentePreferences {
 
     fun setTutorialRequested(context: Context, requested: Boolean) {
         prefs(context).edit().putBoolean(KEY_TUTORIAL_REQUESTED, requested).apply()
+    }
+
+    fun getAudioOutput(context: Context): String =
+        prefs(context).getString(KEY_AUDIO_OUTPUT, DEFAULT_AUDIO_OUTPUT) ?: DEFAULT_AUDIO_OUTPUT
+
+    fun setAudioOutput(context: Context, value: String) {
+        prefs(context).edit().putString(KEY_AUDIO_OUTPUT, value).apply()
     }
 
     /**

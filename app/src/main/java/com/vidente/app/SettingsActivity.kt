@@ -1,5 +1,6 @@
 package com.vidente.app
 
+import android.media.AudioAttributes
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
@@ -26,6 +27,12 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var seekPitch: SeekBar
     private lateinit var textPitchValue: TextView
     private lateinit var spinnerVoice: Spinner
+    private lateinit var spinnerAudioOutput: Spinner
+
+    private val audioOutputValues = listOf(
+        VidentePreferences.AUDIO_OUTPUT_MEDIA,
+        VidentePreferences.AUDIO_OUTPUT_ACCESSIBILITY
+    )
 
     private var currentRate = VidentePreferences.DEFAULT_RATE
     private var currentPitch = VidentePreferences.DEFAULT_PITCH
@@ -39,12 +46,14 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         seekPitch = findViewById(R.id.seekPitch)
         textPitchValue = findViewById(R.id.textPitchValue)
         spinnerVoice = findViewById(R.id.spinnerVoice)
+        spinnerAudioOutput = findViewById(R.id.spinnerAudioOutput)
 
         currentRate = VidentePreferences.getRate(this)
         currentPitch = VidentePreferences.getPitch(this)
 
         setUpRateSeekBar()
         setUpPitchSeekBar()
+        setUpAudioOutputSpinner()
 
         findViewById<Button>(R.id.buttonPreview).setOnClickListener { previewVoice() }
         findViewById<Button>(R.id.buttonReset).setOnClickListener { resetToDefaults() }
@@ -100,6 +109,42 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         })
     }
 
+    private fun setUpAudioOutputSpinner() {
+        val labels = listOf(
+            getString(R.string.settings_audio_output_media),
+            getString(R.string.settings_audio_output_accessibility)
+        )
+        spinnerAudioOutput.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+
+        val saved = VidentePreferences.getAudioOutput(this)
+        spinnerAudioOutput.setSelection(audioOutputValues.indexOf(saved).coerceAtLeast(0))
+
+        spinnerAudioOutput.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                VidentePreferences.setAudioOutput(this@SettingsActivity, audioOutputValues[position])
+                applyAudioOutputToTts()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+    }
+
+    private fun applyAudioOutputToTts() {
+        val engine = tts ?: return
+        val usage = if (VidentePreferences.getAudioOutput(this) == VidentePreferences.AUDIO_OUTPUT_ACCESSIBILITY) {
+            AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
+        } else {
+            AudioAttributes.USAGE_MEDIA
+        }
+        engine.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(usage)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        )
+    }
+
     private fun updateRateLabel(rate: Float) {
         textRateValue.text = getString(R.string.settings_rate_value, rate)
     }
@@ -133,6 +178,7 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         engine.language = Locale.getDefault()
         ttsReady = true
 
+        applyAudioOutputToTts()
         availableVoices = VoiceUtils.availableVoicesForLocale(engine, Locale.getDefault())
         setUpVoiceSpinner()
     }
@@ -179,12 +225,15 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         VidentePreferences.setRate(this, currentRate)
         VidentePreferences.setPitch(this, currentPitch)
         VidentePreferences.setVoiceName(this, null)
+        VidentePreferences.setAudioOutput(this, VidentePreferences.DEFAULT_AUDIO_OUTPUT)
+        applyAudioOutputToTts()
 
         seekRate.progress = rateToProgress(currentRate)
         seekPitch.progress = pitchToProgress(currentPitch)
         updateRateLabel(currentRate)
         updatePitchLabel(currentPitch)
         spinnerVoice.setSelection(0)
+        spinnerAudioOutput.setSelection(audioOutputValues.indexOf(VidentePreferences.DEFAULT_AUDIO_OUTPUT).coerceAtLeast(0))
     }
 
     override fun onDestroy() {
