@@ -51,6 +51,12 @@ class VidenteAccessibilityService :
     // launcher), que llega "al final" sin que el usuario haya desplazado nada.
     private var lastScreenChangeAt = 0L
 
+    // Diagnóstico hablado de ventanas: se dice como mucho una vez cada pocos
+    // segundos cuando "siguiente/anterior" no encuentra a dónde ir (menús
+    // laterales de apps de IA). Temporal, para ver cómo estructuran la ventana.
+    private var lastNavDiagAt = 0L
+    private var lastMoveWrapped = false
+
     private enum class TutorialStep { NONE, EXPLORE, DOUBLE_TAP, NAVIGATE, SYSTEM, READING, MODES }
     private var tutorialStep = TutorialStep.NONE
     private val practicedGestures = mutableSetOf<Int>()
@@ -1001,8 +1007,16 @@ class VidenteAccessibilityService :
                 cycleNavMode()
                 return true
             }
-            GESTURE_SWIPE_RIGHT -> return moveInMode(forward = true)
-            GESTURE_SWIPE_LEFT -> return moveInMode(forward = false)
+            GESTURE_SWIPE_RIGHT -> {
+                val ok = moveInMode(forward = true)
+                if (navMode == NavMode.ELEMENT && (!ok || lastMoveWrapped)) speakNavDiagnostic()
+                return true
+            }
+            GESTURE_SWIPE_LEFT -> {
+                val ok = moveInMode(forward = false)
+                if (navMode == NavMode.ELEMENT && (!ok || lastMoveWrapped)) speakNavDiagnostic()
+                return true
+            }
         }
 
         val (action, spoken) = when (gestureId) {
@@ -1300,6 +1314,7 @@ class VidenteAccessibilityService :
 
         treeWalkBudget = TREE_WALK_BUDGET
         var wrapped = false
+        lastMoveWrapped = false
         var target: AccessibilityNodeInfo? = null
         try {
             val a = anchor
@@ -1316,9 +1331,63 @@ class VidenteAccessibilityService :
 
         val t = target ?: return false
         val done = t.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
-        if (done && wrapped) boundaryAnnouncement = if (forward) BOUNDARY_START else BOUNDARY_END
+        if (done && wrapped) {
+            boundaryAnnouncement = if (forward) BOUNDARY_START else BOUNDARY_END
+            lastMoveWrapped = true
+        }
         t.recycle()
         return done
+    }
+
+    /**
+     * Diagnóstico hablado (temporal) para los menús laterales de apps de IA
+     * (Claude, Grok) donde "siguiente/anterior" no avanza. Enumera las
+     * ventanas visibles y cuántos nodos navegables tiene cada una, para saber
+     * si el menú está en otra ventana o si sus nodos no se exponen.
+     */
+    private fun speakNavDiagnostic() {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastNavDiagAt < NAV_DIAG_MIN_GAP_MS) return
+        lastNavDiagAt = now
+
+        val wins = try { windows ?: emptyList() } catch (e: Exception) { emptyList() }
+        val report = try {
+            if (wins.isEmpty()) {
+                "Diagnóstico. Sin lista de ventanas."
+            } else {
+                val parts = mutableListOf("Diagnóstico. ${wins.size} ventanas")
+                for (w in wins.take(NAV_DIAG_MAX_WINDOWS)) {
+                    val r = try { w.root } catch (e: Exception) { null }
+                    val pkg = r?.packageName?.toString()?.substringAfterLast('.') ?: "sin raíz"
+                    val nav = if (r != null) countNavigable(r, 0) else 0
+                    val flags = buildString {
+                        if (w.isActive) append(" activa")
+                        if (w.isFocused) append(" con foco")
+                    }
+                    parts.add("$pkg $nav navegables$flags")
+                    r?.recycle()
+                }
+                parts.joinToString(". ")
+            }
+        } catch (e: Exception) {
+            "Diagnóstico. Error leyendo ventanas."
+        } finally {
+            wins.forEach { try { it.recycle() } catch (e: Exception) { } }
+        }
+        speak(report)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun countNavigable(node: AccessibilityNodeInfo, depth: Int): Int {
+        if (depth > MAX_DEPTH) return 0
+        var n = if (isNavigable(node)) 1 else 0
+        for (i in 0 until node.childCount) {
+            if (n > NAV_DIAG_NODE_CAP) break
+            val c = node.getChild(i) ?: continue
+            n += countNavigable(c, depth + 1)
+            c.recycle()
+        }
+        return n
     }
 
     /**
@@ -1638,6 +1707,10 @@ class VidenteAccessibilityService :
         private const val MAX_LINES = 60
         private const val MAX_SUMMARY_CHARS = 4000
         private const val MAX_NAV_NODES = 300
+        // Diagnóstico de ventanas (temporal).
+        private const val NAV_DIAG_MIN_GAP_MS = 4000L
+        private const val NAV_DIAG_MAX_WINDOWS = 4
+        private const val NAV_DIAG_NODE_CAP = 400
         // Recorrido del árbol para siguiente/anterior: tope de nodos visitados
         // y de niveles que se suben, para no colgarse en árboles enormes.
         private const val TREE_WALK_BUDGET = 5000
