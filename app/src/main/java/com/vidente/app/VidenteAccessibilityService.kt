@@ -7,8 +7,7 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioTrack
+import android.media.SoundPool
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -95,7 +94,9 @@ class VidenteAccessibilityService :
     // P8c: aviso de posición al hacer scroll como tono (grave = principio,
     // agudo = final) en vez de porcentaje hablado. Configurable en Ajustes.
     private var scrollFeedbackTone = true
-    @Volatile private var scrollToneTrack: AudioTrack? = null
+    private var soundPool: SoundPool? = null
+    private var scrollToneSoundId = 0
+    private var scrollToneLoaded = false
     // Visibilidad del teclado por heurística (sin getWindows(), que rompía el
     // despacho de gestos): se marca visible al ver eventos de un método de
     // entrada o al enfocar un campo, y oculto al cambiar de pantalla o pulsar
@@ -189,6 +190,12 @@ class VidenteAccessibilityService :
         tts?.let { applyPreferences(it) }
         refreshScrollFeedback()
 
+        if (key == VidentePreferences.KEY_AUDIO_OUTPUT) {
+            // El SoundPool fija su ruta de audio al crearse; se rehace.
+            releaseSoundPool()
+            ensureSoundPool()
+        }
+
         if (key == VidentePreferences.KEY_TUTORIAL_REQUESTED &&
             VidentePreferences.isTutorialRequested(this)
         ) {
@@ -202,6 +209,7 @@ class VidenteAccessibilityService :
         Log.i(TAG, "Vidente conectado")
         refreshImePackages()
         refreshScrollFeedback()
+        ensureSoundPool()
         showFloatingButton()
 
         // Tutorial de bienvenida la primera vez que se activa el servicio.
@@ -322,8 +330,10 @@ class VidenteAccessibilityService :
                     lastScrollAnnouncement = "inicio"
                     speak("Principio de la lista")
                 }
-                fraction != null && scrollFeedbackTone -> {
-                    lastScrollAnnouncement = null
+                // Tono si está elegido y el sonido cargó; si no, se habla el
+                // porcentaje como respaldo.
+                fraction != null && scrollFeedbackTone && scrollToneLoaded -> {
+                    lastScrollAnnouncement = "tono"
                     playScrollTone(fraction)
                 }
                 spokenPosition != null && spokenPosition != lastScrollAnnouncement -> {
@@ -337,56 +347,37 @@ class VidenteAccessibilityService :
     }
 
     /**
-     * Tono breve de posición de scroll. Frecuencia de SCROLL_TONE_MIN_HZ
-     * (principio) a SCROLL_TONE_MAX_HZ (final). Onda sinusoidal generada al
-     * vuelo, con AudioTrack, por la misma ruta de audio que la voz.
+     * SoundPool con un tono base (res/raw/scroll_tone.wav, ~700 Hz). El aviso
+     * de posición se reproduce cambiando la velocidad de reproducción: 0.5x
+     * (grave, principio de la lista) a 2x (agudo, final). SoundPool es fiable
+     * y de baja latencia, a diferencia de generar audio con AudioTrack.
      */
-    private fun playScrollTone(fraction: Float) {
-        scrollToneTrack?.let { old ->
-            try { old.pause(); old.flush(); old.release() } catch (_: Exception) {}
+    private fun ensureSoundPool() {
+        if (soundPool != null) return
+        val sp = SoundPool.Builder()
+            .setMaxStreams(2)
+            .setAudioAttributes(buildAudioAttributes())
+            .build()
+        sp.setOnLoadCompleteListener { _, sampleId, status ->
+            if (sampleId == scrollToneSoundId && status == 0) scrollToneLoaded = true
         }
-        scrollToneTrack = null
+        scrollToneSoundId = sp.load(this, R.raw.scroll_tone, 1)
+        soundPool = sp
+    }
 
+    private fun releaseSoundPool() {
+        soundPool?.release()
+        soundPool = null
+        scrollToneLoaded = false
+        scrollToneSoundId = 0
+    }
+
+    private fun playScrollTone(fraction: Float) {
+        val sp = soundPool ?: return
+        if (!scrollToneLoaded) return
         val f = fraction.coerceIn(0f, 1f)
-        val freq = SCROLL_TONE_MIN_HZ + (SCROLL_TONE_MAX_HZ - SCROLL_TONE_MIN_HZ) * f
-        try {
-            val sampleRate = 22050
-            val n = sampleRate * SCROLL_TONE_MS / 1000
-            val fade = n / 8
-            val buf = ShortArray(n)
-            for (i in 0 until n) {
-                val env = when {
-                    i < fade -> i.toFloat() / fade
-                    i > n - fade -> (n - i).toFloat() / fade
-                    else -> 1f
-                }
-                val s = Math.sin(2.0 * Math.PI * freq * i / sampleRate)
-                buf[i] = (s * env * 0.5 * Short.MAX_VALUE).toInt().toShort()
-            }
-            val track = AudioTrack.Builder()
-                .setAudioAttributes(buildAudioAttributes())
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(sampleRate)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .build()
-                )
-                .setBufferSizeInBytes(n * 2)
-                .setTransferMode(AudioTrack.MODE_STATIC)
-                .build()
-            track.write(buf, 0, n)
-            track.play()
-            scrollToneTrack = track
-            mainHandler.postDelayed({
-                if (scrollToneTrack === track) {
-                    try { track.release() } catch (_: Exception) {}
-                    scrollToneTrack = null
-                }
-            }, SCROLL_TONE_MS.toLong() + 120)
-        } catch (e: Exception) {
-            Log.w(TAG, "No se pudo reproducir el tono de scroll", e)
-        }
+        val rate = (0.5f + f * 1.5f).coerceIn(0.5f, 2.0f)
+        sp.play(scrollToneSoundId, 0.7f, 0.7f, 1, 0, rate)
     }
 
     private fun refreshScrollFeedback() {
@@ -1490,8 +1481,7 @@ class VidenteAccessibilityService :
     override fun onDestroy() {
         VidentePreferences.prefs(this).unregisterOnSharedPreferenceChangeListener(this)
         mainHandler.removeCallbacksAndMessages(null)
-        scrollToneTrack?.let { try { it.release() } catch (_: Exception) {} }
-        scrollToneTrack = null
+        releaseSoundPool()
         hideFloatingButton()
         tts?.stop()
         tts?.shutdown()
@@ -1526,9 +1516,6 @@ class VidenteAccessibilityService :
         private const val WINDOW_TITLE_DEBOUNCE_MS = 300L
         private const val KEYBOARD_DEBOUNCE_MS = 350L
         private const val SCROLL_SETTLE_MS = 400L
-        private const val SCROLL_TONE_MS = 140
-        private const val SCROLL_TONE_MIN_HZ = 300f
-        private const val SCROLL_TONE_MAX_HZ = 1400f
         private const val DIALOG_MAX_CHARS = 400
         private const val DIALOG_MAX_PARTS = 12
         // Firma de diálogo: 1-3 botones y árbol pequeño.
