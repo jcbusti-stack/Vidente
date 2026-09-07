@@ -101,7 +101,8 @@ class VidenteAccessibilityService :
     private var soundPool: SoundPool? = null
     private var scrollToneSoundId = 0
     private var scrollToneLoaded = false
-    private var scrollToneStreamId = 0
+    private var scrollBlipRate = 1f          // velocidad de reproducción actual (posición)
+    private var scrollBlipRunnable: Runnable? = null
     // Visibilidad del teclado por heurística (sin getWindows(), que rompía el
     // despacho de gestos): se marca visible al ver eventos de un método de
     // entrada o al enfocar un campo, y oculto al cambiar de pantalla o pulsar
@@ -393,21 +394,28 @@ class VidenteAccessibilityService :
     private fun rateForFraction(fraction: Float): Float =
         (0.5f + fraction.coerceIn(0f, 1f) * 1.5f).coerceIn(0.5f, 2.0f)
 
+    /**
+     * Mientras se arrastra por la lista se repite un blip corto cada
+     * BLIP_INTERVAL_MS; su tono (velocidad de reproducción) sigue a la
+     * posición en vivo. Da una sensación de "ticking" electrónico que sube y
+     * baja, en vez de un tono sostenido.
+     */
     private fun startOrUpdateScrollTone(fraction: Float) {
-        val sp = soundPool ?: return
-        val rate = rateForFraction(fraction)
-        if (scrollToneStreamId == 0) {
-            scrollToneStreamId = sp.play(scrollToneSoundId, SCROLL_TONE_VOL, SCROLL_TONE_VOL, 1, -1, rate)
-        } else {
-            sp.setRate(scrollToneStreamId, rate)
+        scrollBlipRate = rateForFraction(fraction)
+        if (scrollBlipRunnable != null) return
+        val r = object : Runnable {
+            override fun run() {
+                soundPool?.play(scrollToneSoundId, SCROLL_TONE_VOL, SCROLL_TONE_VOL, 1, 0, scrollBlipRate)
+                mainHandler.postDelayed(this, BLIP_INTERVAL_MS)
+            }
         }
+        scrollBlipRunnable = r
+        r.run()
     }
 
     private fun stopScrollTone() {
-        if (scrollToneStreamId != 0) {
-            soundPool?.stop(scrollToneStreamId)
-            scrollToneStreamId = 0
-        }
+        scrollBlipRunnable?.let { mainHandler.removeCallbacks(it) }
+        scrollBlipRunnable = null
     }
 
     private fun refreshScrollFeedback() {
@@ -1574,8 +1582,9 @@ class VidenteAccessibilityService :
         private const val WINDOW_TITLE_DEBOUNCE_MS = 300L
         private const val KEYBOARD_DEBOUNCE_MS = 350L
         private const val SCROLL_SETTLE_MS = 400L
-        private const val SCROLL_TONE_STOP_MS = 250L
-        private const val SCROLL_TONE_VOL = 0.6f
+        private const val SCROLL_TONE_STOP_MS = 220L
+        private const val SCROLL_TONE_VOL = 0.55f
+        private const val BLIP_INTERVAL_MS = 110L
         private const val DIALOG_MAX_CHARS = 400
         private const val DIALOG_MAX_PARTS = 12
         // Firma de diálogo: 1-3 botones y árbol pequeño.
