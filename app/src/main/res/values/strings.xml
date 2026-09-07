@@ -1,0 +1,37 @@
+<resources>
+    <string name="app_name">Vidente</string>
+    <string name="accessibility_service_description">Vidente lee en voz alta el elemento que tiene el foco en pantalla.</string>
+    <string name="main_instructions">Activa Vidente en Ajustes de accesibilidad para que lea en voz alta los elementos enfocados.</string>
+    <string name="open_settings">Abrir ajustes de accesibilidad</string>
+    <string name="open_settings_screen">Ajustes de voz</string>
+
+    <string name="settings_title">Ajustes de voz de Vidente</string>
+    <string name="settings_rate_label">Velocidad de voz</string>
+    <string name="settings_rate_value">Velocidad: %1$.2fx</string>
+    <string name="settings_pitch_label">Tono de voz</string>
+    <string name="settings_pitch_value">Tono: %1$.2fx</string>
+    <string name="settings_voice_label">Voz del sistema</string>
+    <string name="settings_voice_auto">Voz recomendada (automática)</string>
+    <string name="settings_preview_button">Probar voz</string>
+    <string name="settings_reset_button">Restablecer valores</string>
+    <string name="settings_preview_text">Así sonará Vidente al leer los elementos en pantalla.</string>
+    <string name="settings_replay_tutorial">Repetir tutorial</string>
+    <string name="settings_replay_tutorial_started">El tutorial va a empezar. Escucha las instrucciones de Vidente.</string>
+
+    <string name="settings_backend_url_label">Dirección del servidor de Vidente (para el modo conversacional)</string>
+    <string name="settings_backend_url_hint">Ej: https://mi-vidente.onrender.com</string>
+    <string name="settings_backend_key_label">Clave de acceso al servidor (opcional)</string>
+    <string name="settings_backend_key_hint">Solo si tu servidor la pide</string>
+    <string name="settings_backend_save">Guardar</string>
+    <string name="settings_backend_saved">Configuración guardada</string>
+
+    <string name="request_mic_permission">Activar micrófono (modo conversacional)</string>
+    <string name="mic_permission_granted">Permiso de micrófono concedido</string>
+    <string name="mic_permission_denied">Permiso de micrófono denegado. El modo conversacional no funcionará sin él.</string>
+
+    <string name="conversational_floating_button">Preguntar</string>
+    <string name="conversational_floating_button_description">Preguntar a Vidente sobre la pantalla actual</string>
+    <string name="conversational_need_mic_permission">Necesito permiso de micrófono. Abre la app Vidente para concederlo.</string>
+    <string name="conversational_listening">Te escucho. Pregunta sobre la pantalla.</string>
+    <string name="conversational_no_question_heard">No entendí la pregunta, inténtalo de nuevo.</string>
+</resources>
