@@ -24,6 +24,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.inputmethod.InputMethodManager
 import androidx.core.content.ContextCompat
 import java.util.Locale
 
@@ -86,11 +87,13 @@ class VidenteAccessibilityService :
     // ---- Anuncio de título de pantalla (P8a) y de contexto (P8b) ----
     private var lastWindowTitle: String? = null
     private var pendingTitleRunnable: Runnable? = null
-    private var pendingDialogRunnable: Runnable? = null
-    // Visibilidad del teclado por heurística: se marca visible al enfocar un
-    // campo de texto y oculto al cambiar de pantalla o al pulsar Atrás. No se
-    // usa getWindows() (rompía el despacho de gestos).
+    private var pendingKeyboardRunnable: Runnable? = null
+    // Visibilidad del teclado por heurística (sin getWindows(), que rompía el
+    // despacho de gestos): se marca visible al ver eventos de un método de
+    // entrada o al enfocar un campo, y oculto al cambiar de pantalla o pulsar
+    // Atrás. imePackages son los paquetes de los teclados instalados.
     private var keyboardVisible = false
+    private val imePackages = mutableSetOf<String>()
 
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
@@ -184,6 +187,7 @@ class VidenteAccessibilityService :
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "Vidente conectado")
+        refreshImePackages()
         showFloatingButton()
 
         // Tutorial de bienvenida la primera vez que se activa el servicio.
@@ -195,8 +199,25 @@ class VidenteAccessibilityService :
         }
     }
 
+    /** Paquetes de los teclados instalados; para saber que el teclado está en pantalla sin getWindows(). */
+    private fun refreshImePackages() {
+        try {
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager ?: return
+            imm.enabledInputMethodList.forEach { it.packageName?.let(imePackages::add) }
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo listar los teclados instalados", e)
+        }
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+
+        // P8b: cualquier evento de un teclado indica que está en pantalla.
+        val evtPkg = event.packageName?.toString()
+        if (tutorialStep == TutorialStep.NONE && evtPkg != null && evtPkg in imePackages) {
+            onKeyboardEventSeen()
+        }
+
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_FOCUSED,
             AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED,
@@ -239,51 +260,87 @@ class VidenteAccessibilityService :
     }
 
     /**
-     * P8a/P8b: reparte el evento de cambio de ventana. Si la ventana nueva es
-     * un diálogo o menú emergente, lee su contenido (P8b); si no, es un cambio
-     * de pantalla y se anuncia su título (P8a). Además, cualquier cambio de
-     * ventana que no sea un diálogo marca el teclado como oculto.
+     * P8a/P8b: al cambiar de ventana, un único Runnable con retardo mira
+     * rootInActiveWindow (operación de nodo, la misma que el doble toque,
+     * NUNCA getWindows()) y decide: si parece un diálogo, lee su contenido;
+     * si no, anuncia el título de la pantalla nueva. También, si el teclado
+     * estaba en pantalla y la ventana nueva no es del teclado ni un diálogo,
+     * lo marca oculto.
      */
     private fun handleWindowStateChanged(event: AccessibilityEvent) {
-        // Solo "Dialog" en la clase (AlertDialog, BottomSheetDialog, diálogos
-        // propios). Los PopupWindow genéricos (menús, autocompletado) se dejan
-        // fuera para no leer de más mientras se escribe.
-        val cls = event.className?.toString().orEmpty()
-        val isDialog = cls.contains("Dialog")
+        val pkg = event.packageName?.toString()
+        if (pkg.isNullOrBlank() || pkg == packageName ||
+            pkg == "com.android.systemui" || pkg == "android"
+        ) {
+            return
+        }
+        if (pkg in imePackages) return  // el teclado en sí lo maneja onKeyboardEventSeen
 
-        if (!isDialog && keyboardVisible) setKeyboardVisible(false)
+        val eventText = event.text?.joinToString(" ")?.trim()?.takeIf {
+            it.isNotBlank() && it != pkg && !it.startsWith("$pkg/") && !it.contains('.')
+        }
+        val eventCls = event.className?.toString().orEmpty()
 
-        if (isDialog) {
-            announceDialog()
-        } else {
-            handleWindowTitle(event)
+        pendingTitleRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable {
+            try {
+                classifyAndAnnounceWindow(pkg, eventText, eventCls)
+            } catch (e: Exception) {
+                Log.e(TAG, "P8a/P8b: fallo procesando el cambio de ventana", e)
+            }
+        }
+        pendingTitleRunnable = r
+        mainHandler.postDelayed(r, WINDOW_TITLE_DEBOUNCE_MS)
+    }
+
+    private fun classifyAndAnnounceWindow(pkg: String, eventText: String?, eventCls: String) {
+        val root = rootInActiveWindow
+
+        if (root != null && looksLikeDialog(root, eventCls)) {
+            val parts = mutableListOf<String>()
+            collectDialogText(root, parts, depth = 0)
+            root.recycle()
+            val body = parts.joinToString(". ").take(DIALOG_MAX_CHARS)
+            if (body.isNotBlank() && body != lastWindowTitle) {
+                lastWindowTitle = body
+                speak(body)
+            }
+            return
+        }
+
+        root?.recycle()
+        setKeyboardVisible(false)
+
+        val title = eventText ?: appLabel(pkg)
+        if (!title.isNullOrBlank() && title != lastWindowTitle) {
+            lastWindowTitle = title
+            speak(title)
         }
     }
 
     /**
-     * P8b: lee el título y el cuerpo del diálogo que acaba de aparecer. Los
-     * botones no se leen aquí; se exploran deslizando. Usa rootInActiveWindow
-     * (operación de nodo, la misma que el doble toque), nunca getWindows().
+     * Heurística de diálogo sin getWindows(): la clase de la ventana o del
+     * árbol contiene "Dialog", o es una ventana pequeña (pocos nodos) con uno
+     * a tres botones, que es la firma de un cuadro de confirmación.
      */
-    private fun announceDialog() {
-        pendingDialogRunnable?.let { mainHandler.removeCallbacks(it) }
-        val r = Runnable {
-            try {
-                val root = rootInActiveWindow ?: return@Runnable
-                val parts = mutableListOf<String>()
-                collectDialogText(root, parts, depth = 0)
-                root.recycle()
-                val body = parts.joinToString(". ").take(DIALOG_MAX_CHARS)
-                if (body.isNotBlank() && body != lastWindowTitle) {
-                    lastWindowTitle = body
-                    speak(body)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "P8b: fallo leyendo el diálogo", e)
+    private fun looksLikeDialog(root: AccessibilityNodeInfo, eventCls: String): Boolean {
+        val rootCls = root.className?.toString().orEmpty()
+        if (eventCls.contains("Dialog") || rootCls.contains("Dialog")) return true
+
+        var nodes = 0
+        var buttons = 0
+        fun walk(n: AccessibilityNodeInfo, depth: Int) {
+            if (depth > DIALOG_SCAN_DEPTH || nodes > DIALOG_SCAN_MAX_NODES) return
+            nodes++
+            if (n.className?.toString()?.endsWith("Button") == true) buttons++
+            for (i in 0 until n.childCount) {
+                val c = n.getChild(i) ?: continue
+                walk(c, depth + 1)
+                c.recycle()
             }
         }
-        pendingDialogRunnable = r
-        mainHandler.postDelayed(r, DIALOG_DEBOUNCE_MS)
+        walk(root, 0)
+        return buttons in 1..3 && nodes <= DIALOG_MAX_TREE_NODES
     }
 
     private fun collectDialogText(node: AccessibilityNodeInfo, out: MutableList<String>, depth: Int) {
@@ -300,58 +357,35 @@ class VidenteAccessibilityService :
     }
 
     /**
-     * P8b: aviso de teclado. Se encola detrás de lo que se esté leyendo
-     * (QUEUE_ADD) para no cortar la lectura del campo recién enfocado.
+     * P8b: el teclado se detecta viendo eventos cuyo paquete es un método de
+     * entrada (SwiftKey, Gboard, etc.), sin getWindows(). Un Runnable con
+     * retardo dice "Teclado en pantalla" una vez, ya asentado el teclado y su
+     * barra, para que no lo pise la lectura de esos elementos.
      */
+    private fun onKeyboardEventSeen() {
+        if (keyboardVisible) return
+        pendingKeyboardRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable {
+            if (!keyboardVisible) {
+                keyboardVisible = true
+                tts?.speak("Teclado en pantalla", TextToSpeech.QUEUE_ADD, null, UTTERANCE_ID)
+            }
+        }
+        pendingKeyboardRunnable = r
+        mainHandler.postDelayed(r, KEYBOARD_DEBOUNCE_MS)
+    }
+
     private fun setKeyboardVisible(visible: Boolean) {
+        // Ocultar cancela siempre un "en pantalla" pendiente, aunque el estado
+        // ya figure como oculto (el aviso pendiente sería para la pantalla que
+        // ya dejamos).
+        if (!visible) pendingKeyboardRunnable?.let { mainHandler.removeCallbacks(it) }
         if (visible == keyboardVisible) return
         keyboardVisible = visible
         tts?.speak(
             if (visible) "Teclado en pantalla" else "Teclado oculto",
             TextToSpeech.QUEUE_ADD, null, UTTERANCE_ID
         )
-    }
-
-    /**
-     * P8a: al entrar en una pantalla nueva, anuncia su título.
-     *
-     * Fuente del título, por orden: el texto del evento cuando parece un
-     * título de verdad (no el paquete ni un nombre con puntos), y si no, el
-     * nombre visible de la app. Si ninguno sirve, no dice nada (mejor callar
-     * que soltar "com.algo"). Se ignoran ventanas del sistema y del propio
-     * Vidente, no se repite el mismo título, y un único Runnable con retardo
-     * agrupa la ráfaga de eventos de una transición: así appLabel(), que hace
-     * una llamada al PackageManager, se invoca como mucho una vez por cambio
-     * de pantalla y no compite con el despacho de gestos.
-     *
-     * No se usa getWindows(): interfería con performGlobalAction/performAction.
-     */
-    private fun handleWindowTitle(event: AccessibilityEvent) {
-        val pkg = event.packageName?.toString()
-        if (pkg.isNullOrBlank() || pkg == packageName ||
-            pkg == "com.android.systemui" || pkg == "android"
-        ) {
-            return
-        }
-
-        val eventText = event.text?.joinToString(" ")?.trim()?.takeIf {
-            it.isNotBlank() && it != pkg && !it.startsWith("$pkg/") && !it.contains('.')
-        }
-
-        pendingTitleRunnable?.let { mainHandler.removeCallbacks(it) }
-        val r = Runnable {
-            try {
-                val title = eventText ?: appLabel(pkg)
-                if (!title.isNullOrBlank() && title != lastWindowTitle) {
-                    lastWindowTitle = title
-                    speak(title)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "P8a: fallo resolviendo el título de pantalla", e)
-            }
-        }
-        pendingTitleRunnable = r
-        mainHandler.postDelayed(r, WINDOW_TITLE_DEBOUNCE_MS)
     }
 
     /**
@@ -396,7 +430,7 @@ class VidenteAccessibilityService :
 
         if (text.isNullOrBlank()) {
             // P8b: enfocar un campo de texto implica teclado en pantalla.
-            if (editable) setKeyboardVisible(true)
+            if (editable) onKeyboardEventSeen()
             return
         }
 
@@ -406,7 +440,7 @@ class VidenteAccessibilityService :
         val boundary = boundaryAnnouncement
         boundaryAnnouncement = null
         if (text == lastSpoken && boundary == null) {
-            if (editable) setKeyboardVisible(true)
+            if (editable) onKeyboardEventSeen()
             return
         }
 
@@ -416,7 +450,7 @@ class VidenteAccessibilityService :
 
         // Después de leer el campo, para que "Teclado en pantalla" (QUEUE_ADD)
         // se encole detrás y no lo pise.
-        if (editable) setKeyboardVisible(true)
+        if (editable) onKeyboardEventSeen()
 
         if (tutorialStep == TutorialStep.EXPLORE) onExplorePracticed()
     }
@@ -1288,9 +1322,13 @@ class VidenteAccessibilityService :
         private const val BOUNDARY_END = "Final de la pantalla"
 
         private const val WINDOW_TITLE_DEBOUNCE_MS = 300L
-        private const val DIALOG_DEBOUNCE_MS = 350L
+        private const val KEYBOARD_DEBOUNCE_MS = 350L
         private const val DIALOG_MAX_CHARS = 400
         private const val DIALOG_MAX_PARTS = 12
+        // Firma de diálogo: 1-3 botones y árbol pequeño.
+        private const val DIALOG_SCAN_DEPTH = 8
+        private const val DIALOG_SCAN_MAX_NODES = 120
+        private const val DIALOG_MAX_TREE_NODES = 40
 
         // ---- Textos del tutorial de bienvenida (P21) ----
         private const val TUTORIAL_INTRO =
