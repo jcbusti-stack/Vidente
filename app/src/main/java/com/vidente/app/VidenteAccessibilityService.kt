@@ -24,6 +24,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import androidx.core.content.ContextCompat
 import java.util.Locale
 
@@ -82,6 +83,23 @@ class VidenteAccessibilityService :
     // único trazo tembloroso cuente dos veces.
     private var lastDebouncedGestureId = -1
     private var lastDebouncedGestureAt = 0L
+
+    // ---- Anuncios de contexto (P8) ----
+    private enum class TypingEcho { NONE, CHARS, WORDS, CHARS_WORDS }
+    private var typingEchoMode = TypingEcho.CHARS_WORDS
+    private var lastWindowTitle: String? = null
+    private var keyboardVisible = false
+    private var lastScrollAnnouncement: String? = null
+    private var lastCursorIndex = -1
+    // Tras un anuncio importante (título de pantalla, diálogo) se silencian
+    // scroll y ecos hasta este instante, para que no lo pisen de inmediato.
+    private var importantAnnouncementUntil = 0L
+    // Tras escribir o recorrer texto por carácter (P7) se ignora el evento de
+    // cambio de selección que llega justo después, para no leerlo dos veces.
+    private var suppressCursorEchoUntil = 0L
+    private var pendingTitleRunnable: Runnable? = null
+    private var pendingKeyboardRunnable: Runnable? = null
+    private var pendingScrollRunnable: Runnable? = null
 
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
@@ -154,6 +172,7 @@ class VidenteAccessibilityService :
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         tts?.let { applyPreferences(it) }
+        refreshTypingEcho()
 
         if (key == VidentePreferences.KEY_TUTORIAL_REQUESTED &&
             VidentePreferences.isTutorialRequested(this)
@@ -166,6 +185,7 @@ class VidenteAccessibilityService :
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "Vidente conectado")
+        refreshTypingEcho()
         showFloatingButton()
 
         // Tutorial de bienvenida la primera vez que se activa el servicio.
@@ -195,26 +215,34 @@ class VidenteAccessibilityService :
             AccessibilityEvent.TYPE_VIEW_CLICKED ->
                 if (tutorialStep == TutorialStep.DOUBLE_TAP) onDoubleTapPracticed()
 
-            // Pantalla o diálogo nuevo: la lista de lectura continua y el modo
-            // de navegación granular dejan de tener sentido; se reinician sin
-            // anunciar nada (el anuncio del cambio de pantalla es P8).
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> onScreenChanged()
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                onScreenChanged()
+                if (tutorialStep == TutorialStep.NONE) handleWindowStateChanged(event)
+            }
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED ->
+                if (tutorialStep == TutorialStep.NONE) handleWindowsChanged()
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED ->
+                if (tutorialStep == TutorialStep.NONE) handleTextChanged(event)
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED ->
+                if (tutorialStep == TutorialStep.NONE) handleTextSelectionChanged(event)
+            AccessibilityEvent.TYPE_VIEW_SCROLLED ->
+                if (tutorialStep == TutorialStep.NONE) handleScrolled(event)
+            AccessibilityEvent.TYPE_ANNOUNCEMENT ->
+                if (tutorialStep == TutorialStep.NONE) handleAnnouncement(event)
 
-            // Base para P8: contenido de ventana, escritura, scroll, selección
-            // y anuncios de la app. Por ahora solo se reciben.
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_SCROLLED,
-            AccessibilityEvent.TYPE_VIEW_SELECTED,
-            AccessibilityEvent.TYPE_ANNOUNCEMENT -> Unit
+            AccessibilityEvent.TYPE_VIEW_SELECTED -> Unit
 
             else -> Unit
         }
     }
 
+    /** Nueva pantalla o diálogo: se reinicia el estado dependiente de la pantalla. */
     private fun onScreenChanged() {
         stopContinuousReading()
         navMode = NavMode.ELEMENT
+        lastScrollAnnouncement = null
+        lastCursorIndex = -1
     }
 
     /** Lectura hablada del elemento que recibe el foco o el toque. */
@@ -247,6 +275,7 @@ class VidenteAccessibilityService :
         if (text == lastSpoken && boundary == null) return
 
         lastSpoken = text
+        lastCursorIndex = -1
         val toSpeak = if (boundary != null) "$boundary. $text" else text
         if (ttsReady) speak(toSpeak) else pendingText = toSpeak
 
@@ -350,6 +379,25 @@ class VidenteAccessibilityService :
 
     private fun speak(text: String) {
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
+    }
+
+    /**
+     * Anuncio de contexto importante (título de pantalla, diálogo). Interrumpe
+     * lo que se esté diciendo y abre un enfriamiento durante el cual se
+     * silencian scroll y ecos para que no lo pisen.
+     */
+    private fun speakImportant(text: String) {
+        importantAnnouncementUntil = SystemClock.uptimeMillis() + IMPORTANT_COOLDOWN_MS
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
+    }
+
+    private fun refreshTypingEcho() {
+        typingEchoMode = when (VidentePreferences.getTypingEcho(this)) {
+            VidentePreferences.TYPING_ECHO_NONE -> TypingEcho.NONE
+            VidentePreferences.TYPING_ECHO_CHARS -> TypingEcho.CHARS
+            VidentePreferences.TYPING_ECHO_WORDS -> TypingEcho.WORDS
+            else -> TypingEcho.CHARS_WORDS
+        }
     }
 
     /**
@@ -692,7 +740,13 @@ class VidenteAccessibilityService :
         }
         val done = focused.performAction(action, args)
         focused.recycle()
-        if (!done) speak(if (forward) "Final del texto" else "Principio del texto")
+        if (done) {
+            // El cambio de selección que dispara esta acción no debe leerse
+            // otra vez desde handleTextSelectionChanged.
+            suppressCursorEchoUntil = SystemClock.uptimeMillis() + CURSOR_ECHO_SUPPRESS_MS
+        } else {
+            speak(if (forward) "Final del texto" else "Principio del texto")
+        }
         return done
     }
 
@@ -1041,12 +1095,249 @@ class VidenteAccessibilityService :
         speakTutorial("Bien, así se cambia de modo. $TUTORIAL_DONE")
     }
 
+    // ---- Anuncios de contexto (P8) ----
+
+    private fun contextEchosSuppressed(): Boolean =
+        (continuousReading && !continuousPaused) ||
+            SystemClock.uptimeMillis() < importantAnnouncementUntil
+
+    /** 1: título de la pantalla nueva. 2: contenido del diálogo que aparece. */
+    private fun handleWindowStateChanged(event: AccessibilityEvent) {
+        val pkg = event.packageName?.toString()
+        if (pkg == packageName || pkg == "com.android.systemui") return
+
+        val cls = event.className?.toString().orEmpty()
+        val isDialog = cls.contains("Dialog") || cls.contains("PopupWindow")
+        val title = windowTitle(event)
+
+        pendingTitleRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable {
+            if (isDialog) {
+                announceDialog()
+            } else if (!title.isNullOrBlank() && title != lastWindowTitle) {
+                lastWindowTitle = title
+                speakImportant(title)
+            }
+        }
+        pendingTitleRunnable = r
+        mainHandler.postDelayed(r, CONTEXT_DEBOUNCE_MS)
+    }
+
+    private fun windowTitle(event: AccessibilityEvent): String? {
+        event.text?.joinToString(" ")?.takeIf { it.isNotBlank() }?.let { return it }
+        try {
+            windows.firstOrNull { it.isActive }?.title?.toString()
+                ?.takeIf { it.isNotBlank() }?.let { return it }
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo leer el título de la ventana activa", e)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val root = rootInActiveWindow
+            val pane = root?.paneTitle?.toString()
+            root?.recycle()
+            if (!pane.isNullOrBlank()) return pane
+        }
+        return null
+    }
+
+    private fun announceDialog() {
+        val root = rootInActiveWindow ?: return
+        val parts = mutableListOf<String>()
+        collectDialogText(root, parts, depth = 0)
+        root.recycle()
+        val body = parts.joinToString(". ").take(DIALOG_MAX_CHARS)
+        if (body.isNotBlank()) speakImportant(body)
+    }
+
+    private fun collectDialogText(node: AccessibilityNodeInfo, out: MutableList<String>, depth: Int) {
+        if (depth > MAX_DEPTH || out.size >= DIALOG_MAX_PARTS) return
+        val cn = node.className?.toString().orEmpty()
+        // Los botones se exploran deslizando; no se leen aquí.
+        if (!cn.endsWith("Button")) {
+            ownLabel(node)?.let { if (it !in out) out.add(it) }
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            collectDialogText(child, out, depth + 1)
+            child.recycle()
+        }
+    }
+
+    /** 3: aparición y desaparición del teclado. */
+    private fun handleWindowsChanged() {
+        pendingKeyboardRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable {
+            val up = imeWindowPresent()
+            if (up != keyboardVisible) {
+                keyboardVisible = up
+                speak(if (up) "Teclado en pantalla" else "Teclado oculto")
+            }
+        }
+        pendingKeyboardRunnable = r
+        mainHandler.postDelayed(r, KEYBOARD_DEBOUNCE_MS)
+    }
+
+    private fun imeWindowPresent(): Boolean = try {
+        windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+    } catch (e: Exception) {
+        keyboardVisible
+    }
+
+    /** 4: eco de escritura (carácter y/o palabra), y aviso de borrado. */
+    private fun handleTextChanged(event: AccessibilityEvent) {
+        if (typingEchoMode == TypingEcho.NONE || contextEchosSuppressed()) return
+
+        val source = event.source
+        val isPassword = source?.isPassword == true
+        source?.recycle()
+
+        val newText = event.text?.joinToString("") ?: ""
+        val before = event.beforeText?.toString() ?: ""
+        val from = event.fromIndex
+        val added = event.addedCount
+        val removed = event.removedCount
+
+        // Al escribir o borrar también llega un cambio de selección: que no se lea.
+        suppressCursorEchoUntil = SystemClock.uptimeMillis() + CURSOR_ECHO_SUPPRESS_MS
+
+        if (removed > 0 && added == 0) {
+            if (isPassword) {
+                speak("borrado")
+                return
+            }
+            val deleted = if (from >= 0 && from + removed <= before.length) {
+                before.substring(from, from + removed)
+            } else {
+                ""
+            }
+            speak(if (deleted.isNotBlank()) "borrado, $deleted" else "borrado")
+            return
+        }
+
+        if (added <= 0) return
+        if (isPassword) return
+
+        val addedText = if (from >= 0 && from + added <= newText.length) {
+            newText.substring(from, from + added)
+        } else {
+            ""
+        }
+        if (addedText.isEmpty()) return
+
+        val echoChars = typingEchoMode == TypingEcho.CHARS || typingEchoMode == TypingEcho.CHARS_WORDS
+        val echoWords = typingEchoMode == TypingEcho.WORDS || typingEchoMode == TypingEcho.CHARS_WORDS
+        val separator = addedText.length == 1 && isWordSeparator(addedText[0])
+
+        if (echoWords && separator) {
+            val word = wordEndingAt(newText, from)
+            if (word.isNotBlank()) {
+                speak(word)
+                return
+            }
+        }
+
+        if (echoChars) speak(addedText)
+    }
+
+    private fun isWordSeparator(c: Char): Boolean =
+        c.isWhitespace() || c in ".,;:!?)]}\"'»…¡¿"
+
+    private fun wordEndingAt(text: String, endExclusive: Int): String {
+        var end = endExclusive.coerceIn(0, text.length)
+        while (end > 0 && isWordSeparator(text[end - 1])) end--
+        var start = end
+        while (start > 0 && !isWordSeparator(text[start - 1])) start--
+        return text.substring(start, end)
+    }
+
+    /** 5: movimiento del cursor y selección de texto dentro de un campo. */
+    private fun handleTextSelectionChanged(event: AccessibilityEvent) {
+        if (contextEchosSuppressed()) return
+        if (SystemClock.uptimeMillis() < suppressCursorEchoUntil) return
+
+        val text = event.text?.joinToString("") ?: ""
+        val from = event.fromIndex
+        val to = event.toIndex
+        if (from < 0 || to < 0) return
+
+        if (from != to) {
+            val a = minOf(from, to)
+            val b = maxOf(from, to)
+            if (a < b && b <= text.length) {
+                val sel = text.substring(a, b)
+                if (sel.length <= SELECTION_SPEAK_MAX) {
+                    speak("$sel, seleccionado")
+                } else {
+                    speak("${b - a} caracteres seleccionados")
+                }
+            }
+            lastCursorIndex = -1
+            return
+        }
+
+        val prev = lastCursorIndex
+        lastCursorIndex = from
+        if (prev < 0 || from == prev) return
+        val idx = if (from > prev) from - 1 else from
+        if (idx in text.indices) {
+            val ch = text[idx]
+            speak(if (ch.isWhitespace()) "espacio" else ch.toString())
+        }
+    }
+
+    /** 6: posición al desplazarse, anunciada solo cuando el scroll se detiene. */
+    private fun handleScrolled(event: AccessibilityEvent) {
+        if (contextEchosSuppressed()) return
+
+        val fromIndex = event.fromIndex
+        val toIndex = event.toIndex
+        val itemCount = event.itemCount
+        val hasApi28 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+        val scrollY = if (hasApi28) event.scrollY else -1
+        val maxScrollY = if (hasApi28) event.maxScrollY else -1
+        val scrollX = if (hasApi28) event.scrollX else -1
+        val maxScrollX = if (hasApi28) event.maxScrollX else -1
+
+        val atStart = (itemCount > 0 && fromIndex == 0) ||
+            (maxScrollY > 0 && scrollY == 0) || (maxScrollX > 0 && scrollX == 0)
+        val atEnd = (itemCount > 0 && toIndex >= 0 && toIndex == itemCount - 1) ||
+            (maxScrollY > 0 && scrollY >= maxScrollY) || (maxScrollX > 0 && scrollX >= maxScrollX)
+
+        val position = when {
+            itemCount > 0 && fromIndex >= 0 -> "elemento ${fromIndex + 1} de $itemCount"
+            maxScrollY > 0 && scrollY >= 0 -> "${scrollY * 100 / maxScrollY} por ciento"
+            maxScrollX > 0 && scrollX >= 0 -> "${scrollX * 100 / maxScrollX} por ciento"
+            else -> null
+        }
+
+        pendingScrollRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable {
+            val out = when {
+                atEnd -> "Final de la lista"
+                atStart -> "Principio de la lista"
+                else -> position
+            } ?: return@Runnable
+            if (out == lastScrollAnnouncement) return@Runnable
+            lastScrollAnnouncement = out
+            speak(out)
+        }
+        pendingScrollRunnable = r
+        mainHandler.postDelayed(r, SCROLL_SETTLE_MS)
+    }
+
+    private fun handleAnnouncement(event: AccessibilityEvent) {
+        if (continuousReading && !continuousPaused) return
+        val text = event.text?.joinToString(" ")?.takeIf { it.isNotBlank() } ?: return
+        speak(text)
+    }
+
     override fun onInterrupt() {
         tts?.stop()
     }
 
     override fun onDestroy() {
         VidentePreferences.prefs(this).unregisterOnSharedPreferenceChangeListener(this)
+        mainHandler.removeCallbacksAndMessages(null)
         hideFloatingButton()
         tts?.stop()
         tts?.shutdown()
@@ -1077,6 +1368,16 @@ class VidenteAccessibilityService :
 
         private const val BOUNDARY_START = "Principio de la pantalla"
         private const val BOUNDARY_END = "Final de la pantalla"
+
+        // ---- Anuncios de contexto (P8) ----
+        private const val CONTEXT_DEBOUNCE_MS = 150L
+        private const val KEYBOARD_DEBOUNCE_MS = 250L
+        private const val SCROLL_SETTLE_MS = 400L
+        private const val IMPORTANT_COOLDOWN_MS = 700L
+        private const val CURSOR_ECHO_SUPPRESS_MS = 150L
+        private const val DIALOG_MAX_CHARS = 400
+        private const val DIALOG_MAX_PARTS = 12
+        private const val SELECTION_SPEAK_MAX = 50
 
         // ---- Textos del tutorial de bienvenida (P21) ----
         private const val TUTORIAL_INTRO =
