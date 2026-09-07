@@ -38,6 +38,8 @@ class VidenteAccessibilityService :
     private var ttsReady = false
     private var lastSpoken: String? = null
     private var pendingText: String? = null
+    // Copia del último elemento que Vidente leyó; ancla de respaldo para P5.
+    private var lastFocusedNode: AccessibilityNodeInfo? = null
 
     // Aviso ("Principio/Final de la pantalla") pendiente de anteponer a la
     // próxima lectura de elemento tras envolver en la navegación lineal (P5).
@@ -280,12 +282,20 @@ class VidenteAccessibilityService :
         }
     }
 
+    @Suppress("DEPRECATION")
+    private fun rememberFocusedNode(node: AccessibilityNodeInfo) {
+        lastFocusedNode?.recycle()
+        lastFocusedNode = try { AccessibilityNodeInfo.obtain(node) } catch (e: Exception) { null }
+    }
+
     private fun onScreenChanged() {
         stopContinuousReading()
         navMode = NavMode.ELEMENT
         stopScrollTone()
         lastScrollBoundary = null
         lastSpokenScrollPos = null
+        lastFocusedNode?.recycle()
+        lastFocusedNode = null
     }
 
     /**
@@ -584,6 +594,11 @@ class VidenteAccessibilityService :
         val text = describeForSpeech(node)
         val editable = node.isEditable ||
             node.className?.toString()?.endsWith("EditText") == true
+
+        // Copia del último elemento leído: ancla de respaldo para
+        // "siguiente/anterior" cuando la app no acepta el foco de accesibilidad.
+        rememberFocusedNode(node)
+
         node.recycle()
 
         if (text.isNullOrBlank()) {
@@ -1268,30 +1283,48 @@ class VidenteAccessibilityService :
     }
 
     /**
-     * Devuelve (índice en la lista, hay foco). El índice es el del nodo con
-     * foco de accesibilidad o el de su ancestro más cercano que esté en la
-     * lista; -1 si no se ubica. "hay foco" indica si findFocus devolvió algo.
+     * Devuelve (índice en la lista, hay foco). Prueba dos anclas: el nodo con
+     * foco de accesibilidad de verdad (findFocus) y, si falla, la última copia
+     * del elemento que Vidente leyó (lastFocusedNode, refrescada). De cada una
+     * sube por los ancestros hasta dar con un nodo que esté en la lista. Hace
+     * falta la segunda ancla en apps que no aceptan ACTION_ACCESSIBILITY_FOCUS
+     * (React Native, WebView), como el menú lateral de la app de Claude.
      */
+    @Suppress("DEPRECATION")
     private fun locateFocusInList(
         root: AccessibilityNodeInfo,
         nodes: List<AccessibilityNodeInfo>
     ): Pair<Int, Boolean> {
-        var node: AccessibilityNodeInfo? =
-            root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY) ?: return -1 to false
-        var depth = 0
-        while (depth < MAX_CLICKABLE_ANCESTOR_DEPTH + 2) {
-            val current = node ?: break
-            val idx = nodes.indexOfFirst { it == current }
-            if (idx >= 0) {
-                current.recycle()
-                return idx to true
+        val anchors = mutableListOf<AccessibilityNodeInfo>()
+        root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)?.let { anchors.add(it) }
+        lastFocusedNode?.let { lf ->
+            if (try { lf.refresh() } catch (e: Exception) { false }) {
+                anchors.add(AccessibilityNodeInfo.obtain(lf))
             }
-            val parent = current.parent
-            current.recycle()
-            node = parent
-            depth++
         }
-        node?.recycle()
+        if (anchors.isEmpty()) return -1 to false
+
+        try {
+            for (anchor in anchors) {
+                var node: AccessibilityNodeInfo? = AccessibilityNodeInfo.obtain(anchor)
+                var depth = 0
+                while (depth < ANCESTOR_SEARCH_DEPTH) {
+                    val current = node ?: break
+                    val idx = nodes.indexOfFirst { it == current }
+                    if (idx >= 0) {
+                        current.recycle()
+                        return idx to true
+                    }
+                    val parent = current.parent
+                    current.recycle()
+                    node = parent
+                    depth++
+                }
+                node?.recycle()
+            }
+        } finally {
+            anchors.forEach { it.recycle() }
+        }
         return -1 to true
     }
 
@@ -1502,6 +1535,8 @@ class VidenteAccessibilityService :
         VidentePreferences.prefs(this).unregisterOnSharedPreferenceChangeListener(this)
         mainHandler.removeCallbacksAndMessages(null)
         releaseSoundPool()
+        lastFocusedNode?.recycle()
+        lastFocusedNode = null
         hideFloatingButton()
         tts?.stop()
         tts?.shutdown()
@@ -1519,7 +1554,10 @@ class VidenteAccessibilityService :
         private const val MAX_CLICKABLE_ANCESTOR_DEPTH = 6
         private const val MAX_LINES = 60
         private const val MAX_SUMMARY_CHARS = 4000
-        private const val MAX_NAV_NODES = 200
+        private const val MAX_NAV_NODES = 300
+        // Niveles de ancestros que se suben buscando el elemento actual en la
+        // lista (los árboles de React Native / WebView anidan mucho).
+        private const val ANCESTOR_SEARCH_DEPTH = 20
         private const val MAX_ALL_NODES = 500
 
         // Gestos que alternan estado o ciclan: se ignora una repetición del
