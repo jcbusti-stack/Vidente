@@ -26,15 +26,6 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var seekPitch: SeekBar
     private lateinit var textPitchValue: TextView
     private lateinit var spinnerVoice: Spinner
-    private lateinit var spinnerTypingEcho: Spinner
-
-    // Orden de las opciones del desplegable de eco de escritura.
-    private val typingEchoValues = listOf(
-        VidentePreferences.TYPING_ECHO_NONE,
-        VidentePreferences.TYPING_ECHO_CHARS,
-        VidentePreferences.TYPING_ECHO_WORDS,
-        VidentePreferences.TYPING_ECHO_CHARS_WORDS
-    )
 
     private var currentRate = VidentePreferences.DEFAULT_RATE
     private var currentPitch = VidentePreferences.DEFAULT_PITCH
@@ -48,14 +39,12 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         seekPitch = findViewById(R.id.seekPitch)
         textPitchValue = findViewById(R.id.textPitchValue)
         spinnerVoice = findViewById(R.id.spinnerVoice)
-        spinnerTypingEcho = findViewById(R.id.spinnerTypingEcho)
 
         currentRate = VidentePreferences.getRate(this)
         currentPitch = VidentePreferences.getPitch(this)
 
         setUpRateSeekBar()
         setUpPitchSeekBar()
-        setUpTypingEchoSpinner()
 
         findViewById<Button>(R.id.buttonPreview).setOnClickListener { previewVoice() }
         findViewById<Button>(R.id.buttonReset).setOnClickListener { resetToDefaults() }
@@ -109,29 +98,6 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             override fun onStartTrackingTouch(seekBar: SeekBar) {}
             override fun onStopTrackingTouch(seekBar: SeekBar) {}
         })
-    }
-
-    private fun setUpTypingEchoSpinner() {
-        val labels = listOf(
-            getString(R.string.settings_typing_echo_none),
-            getString(R.string.settings_typing_echo_chars),
-            getString(R.string.settings_typing_echo_words),
-            getString(R.string.settings_typing_echo_chars_words)
-        )
-        spinnerTypingEcho.adapter =
-            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-
-        val saved = VidentePreferences.getTypingEcho(this)
-        val savedIndex = typingEchoValues.indexOf(saved).let { if (it >= 0) it else typingEchoValues.lastIndex }
-        spinnerTypingEcho.setSelection(savedIndex)
-
-        spinnerTypingEcho.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                VidentePreferences.setTypingEcho(this@SettingsActivity, typingEchoValues[position])
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
-        }
     }
 
     private fun updateRateLabel(rate: Float) {
@@ -213,16 +179,12 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         VidentePreferences.setRate(this, currentRate)
         VidentePreferences.setPitch(this, currentPitch)
         VidentePreferences.setVoiceName(this, null)
-        VidentePreferences.setTypingEcho(this, VidentePreferences.DEFAULT_TYPING_ECHO)
 
         seekRate.progress = rateToProgress(currentRate)
         seekPitch.progress = pitchToProgress(currentPitch)
         updateRateLabel(currentRate)
         updatePitchLabel(currentPitch)
         spinnerVoice.setSelection(0)
-        spinnerTypingEcho.setSelection(
-            typingEchoValues.indexOf(VidentePreferences.DEFAULT_TYPING_ECHO)
-        )
     }
 
     override fun onDestroy() {

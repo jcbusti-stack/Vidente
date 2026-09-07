@@ -14,14 +14,6 @@ object VidentePreferences {
     const val KEY_DEVICE_ID = "device_id"
     const val KEY_TUTORIAL_DONE = "tutorial_done"
     const val KEY_TUTORIAL_REQUESTED = "tutorial_requested"
-    const val KEY_TYPING_ECHO = "typing_echo"
-
-    // Eco de escritura (P8): "none" | "chars" | "words" | "chars_words".
-    const val TYPING_ECHO_NONE = "none"
-    const val TYPING_ECHO_CHARS = "chars"
-    const val TYPING_ECHO_WORDS = "words"
-    const val TYPING_ECHO_CHARS_WORDS = "chars_words"
-    const val DEFAULT_TYPING_ECHO = TYPING_ECHO_CHARS_WORDS
 
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
@@ -85,13 +77,6 @@ object VidentePreferences {
 
     fun setTutorialRequested(context: Context, requested: Boolean) {
         prefs(context).edit().putBoolean(KEY_TUTORIAL_REQUESTED, requested).apply()
-    }
-
-    fun getTypingEcho(context: Context): String =
-        prefs(context).getString(KEY_TYPING_ECHO, DEFAULT_TYPING_ECHO) ?: DEFAULT_TYPING_ECHO
-
-    fun setTypingEcho(context: Context, value: String) {
-        prefs(context).edit().putString(KEY_TYPING_ECHO, value).apply()
     }
 
     /**

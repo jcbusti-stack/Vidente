@@ -17,11 +17,6 @@
     <string name="settings_preview_text">Así sonará Vidente al leer los elementos en pantalla.</string>
     <string name="settings_replay_tutorial">Repetir tutorial</string>
     <string name="settings_replay_tutorial_started">El tutorial va a empezar. Escucha las instrucciones de Vidente.</string>
-    <string name="settings_typing_echo_label">Eco de escritura</string>
-    <string name="settings_typing_echo_none">Ninguno</string>
-    <string name="settings_typing_echo_chars">Caracteres</string>
-    <string name="settings_typing_echo_words">Palabras</string>
-    <string name="settings_typing_echo_chars_words">Caracteres y palabras</string>
 
     <string name="settings_backend_url_label">Dirección del servidor de Vidente (para el modo conversacional)</string>
     <string name="settings_backend_url_hint">Ej: https://mi-vidente.onrender.com</string>

@@ -73,20 +73,6 @@
             android:layout_marginBottom="24dp"
             android:contentDescription="@string/settings_voice_label" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/settings_typing_echo_label"
-            android:textSize="16sp" />
-
-        <Spinner
-            android:id="@+id/spinnerTypingEcho"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:contentDescription="@string/settings_typing_echo_label" />
-
         <Button
             android:id="@+id/buttonPreview"
             android:layout_width="match_parent"
