@@ -432,7 +432,9 @@ class VidenteAccessibilityService :
             className.endsWith("RadioButton") -> "opción"
             node.isCheckable -> "casilla"
             className.endsWith("SeekBar") -> "control deslizante"
-            className.endsWith("Button") || node.isClickable -> "botón"
+            // Solo se dice "botón" en botones de verdad. Los íconos del inicio y
+            // las filas clickeables normales se leen solo con su nombre.
+            className.endsWith("Button") -> "botón"
             else -> null
         }
     }
