@@ -331,13 +331,48 @@ class VidenteAccessibilityService :
     /**
      * Anuncio hablado de un nodo: nombre, rol y estado.
      * Ej: "Wi-Fi, interruptor, activado".
+     *
+     * El rol y el estado se toman del control de verdad: si el foco cae sobre
+     * una fila (contenedor solo clickable) que contiene un Switch o una
+     * casilla, se usa ese hijo. Así "Usar Vidente" se anuncia como
+     * "interruptor, desactivado" en vez de "botón".
      */
     private fun describeForSpeech(node: AccessibilityNodeInfo): String? {
         val label = findLabel(node) ?: return null
         val parts = mutableListOf(label)
-        roleOf(node)?.let { parts.add(it) }
-        parts.addAll(statesOf(node))
+
+        val control = effectiveControlNode(node)
+        roleOf(control)?.let { parts.add(it) }
+        parts.addAll(statesOf(control))
+        if (control !== node) control.recycle()
+
         return parts.joinToString(", ")
+    }
+
+    private fun effectiveControlNode(node: AccessibilityNodeInfo): AccessibilityNodeInfo {
+        if (isRecognisedControl(node)) return node
+        return controlDescendant(node, depth = 0) ?: node
+    }
+
+    private fun isRecognisedControl(node: AccessibilityNodeInfo): Boolean {
+        if (node.isEditable || node.isCheckable) return true
+        val cn = node.className?.toString().orEmpty()
+        return cn.endsWith("Switch") || cn.endsWith("SwitchCompat") || cn.endsWith("SwitchMaterial") ||
+            cn.endsWith("ToggleButton") || cn.endsWith("CheckBox") || cn.endsWith("RadioButton") ||
+            cn.endsWith("SeekBar") || cn.endsWith("EditText")
+    }
+
+    @Suppress("DEPRECATION")
+    private fun controlDescendant(node: AccessibilityNodeInfo, depth: Int): AccessibilityNodeInfo? {
+        if (depth >= MAX_LABEL_DEPTH) return null
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            if (isRecognisedControl(child)) return child
+            val deeper = controlDescendant(child, depth + 1)
+            child.recycle()
+            if (deeper != null) return deeper
+        }
+        return null
     }
 
     /** Etiqueta propia del nodo, sin mirar el resto del árbol. */
