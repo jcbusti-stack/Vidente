@@ -1284,11 +1284,18 @@ class VidenteAccessibilityService :
         return done
     }
 
-    /** Sucesor (o predecesor) navegable de `from` en orden de lectura, o null si se agota el árbol. */
+    /**
+     * Sucesor (o predecesor) navegable de `from` en orden de lectura, o null
+     * si se agota el árbol.
+     *
+     * NO se desciende dentro de `from`: el elemento actual es una parada
+     * atómica (si además se bajara a su etiqueta o a un hijo, harían falta
+     * dos deslizamientos para avanzar una fila de verdad). El sucesor es el
+     * siguiente hermano navegable, o el primer navegable dentro de un hermano
+     * posterior, subiendo por los ancestros si el hermano no existe.
+     */
     @Suppress("DEPRECATION")
     private fun treeSuccessor(from: AccessibilityNodeInfo, forward: Boolean): AccessibilityNodeInfo? {
-        firstNavigableInSubtree(from, includeSelf = false, forward = forward)?.let { return it }
-
         var cur: AccessibilityNodeInfo? = AccessibilityNodeInfo.obtain(from)
         var climbed = 0
         while (climbed < TREE_CLIMB_DEPTH) {
