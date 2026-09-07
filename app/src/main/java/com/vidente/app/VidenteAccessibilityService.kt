@@ -84,10 +84,12 @@ class VidenteAccessibilityService :
     private var lastDebouncedGestureId = -1
     private var lastDebouncedGestureAt = 0L
 
-    // ---- Anuncio de título de pantalla (P8a) y de contexto (P8b) ----
+    // ---- Anuncio de título de pantalla (P8a) y de contexto (P8b, P8c) ----
     private var lastWindowTitle: String? = null
     private var pendingTitleRunnable: Runnable? = null
     private var pendingKeyboardRunnable: Runnable? = null
+    private var pendingScrollRunnable: Runnable? = null
+    private var lastScrollAnnouncement: String? = null
     // Visibilidad del teclado por heurística (sin getWindows(), que rompía el
     // despacho de gestos): se marca visible al ver eventos de un método de
     // entrada o al enfocar un campo, y oculto al cambiar de pantalla o pulsar
@@ -242,11 +244,12 @@ class VidenteAccessibilityService :
                 if (tutorialStep == TutorialStep.NONE) handleWindowStateChanged(event)
             }
 
-            // Base para P8: contenido de ventana, escritura, scroll, selección
-            // y anuncios de la app. Por ahora solo se reciben.
+            // P8c: posición al desplazarse (solo al detenerse el scroll).
+            AccessibilityEvent.TYPE_VIEW_SCROLLED ->
+                if (tutorialStep == TutorialStep.NONE) handleScrolled(event)
+
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_SCROLLED,
             AccessibilityEvent.TYPE_VIEW_SELECTED,
             AccessibilityEvent.TYPE_ANNOUNCEMENT -> Unit
 
@@ -257,6 +260,52 @@ class VidenteAccessibilityService :
     private fun onScreenChanged() {
         stopContinuousReading()
         navMode = NavMode.ELEMENT
+        lastScrollAnnouncement = null
+    }
+
+    /**
+     * P8c: al desplazarse por una lista, anuncia la posición una sola vez,
+     * cuando el scroll se detiene (retardo con un único Runnable). Dice
+     * "elemento X de Y" si el nodo expone índices y total, o un porcentaje si
+     * expone posición y máximo; si no hay ningún dato, no dice nada. No repite
+     * el mismo anuncio. Siempre avisa al llegar al principio o al final.
+     */
+    private fun handleScrolled(event: AccessibilityEvent) {
+        if (continuousReading && !continuousPaused) return
+
+        val fromIndex = event.fromIndex
+        val toIndex = event.toIndex
+        val itemCount = event.itemCount
+        val scrollY = event.scrollY
+        val maxScrollY = event.maxScrollY
+        val scrollX = event.scrollX
+        val maxScrollX = event.maxScrollX
+
+        val atStart = (itemCount > 0 && fromIndex == 0) ||
+            (maxScrollY > 0 && scrollY == 0) || (maxScrollX > 0 && scrollX == 0)
+        val atEnd = (itemCount > 0 && toIndex >= 0 && toIndex == itemCount - 1) ||
+            (maxScrollY > 0 && scrollY >= maxScrollY) || (maxScrollX > 0 && scrollX >= maxScrollX)
+
+        val position = when {
+            itemCount > 0 && fromIndex >= 0 -> "elemento ${fromIndex + 1} de $itemCount"
+            maxScrollY > 0 && scrollY >= 0 -> "${scrollY * 100 / maxScrollY} por ciento"
+            maxScrollX > 0 && scrollX >= 0 -> "${scrollX * 100 / maxScrollX} por ciento"
+            else -> null
+        }
+
+        pendingScrollRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable {
+            val out = when {
+                atEnd -> "Final de la lista"
+                atStart -> "Principio de la lista"
+                else -> position
+            } ?: return@Runnable
+            if (out == lastScrollAnnouncement) return@Runnable
+            lastScrollAnnouncement = out
+            speak(out)
+        }
+        pendingScrollRunnable = r
+        mainHandler.postDelayed(r, SCROLL_SETTLE_MS)
     }
 
     /**
@@ -1388,6 +1437,7 @@ class VidenteAccessibilityService :
 
         private const val WINDOW_TITLE_DEBOUNCE_MS = 300L
         private const val KEYBOARD_DEBOUNCE_MS = 350L
+        private const val SCROLL_SETTLE_MS = 400L
         private const val DIALOG_MAX_CHARS = 400
         private const val DIALOG_MAX_PARTS = 12
         // Firma de diálogo: 1-3 botones y árbol pequeño.
