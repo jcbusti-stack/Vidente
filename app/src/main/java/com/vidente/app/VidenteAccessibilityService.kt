@@ -83,6 +83,10 @@ class VidenteAccessibilityService :
     private var lastDebouncedGestureId = -1
     private var lastDebouncedGestureAt = 0L
 
+    // ---- Anuncio de título de pantalla (P8a) ----
+    private var lastWindowTitle: String? = null
+    private var pendingTitleRunnable: Runnable? = null
+
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
     private val backendAssistant: ConversationalAssistant by lazy { BackendConversationalAssistant(this) }
@@ -195,10 +199,12 @@ class VidenteAccessibilityService :
             AccessibilityEvent.TYPE_VIEW_CLICKED ->
                 if (tutorialStep == TutorialStep.DOUBLE_TAP) onDoubleTapPracticed()
 
-            // Pantalla o diálogo nuevo: la lista de lectura continua y el modo
-            // de navegación granular dejan de tener sentido; se reinician sin
-            // anunciar nada (el anuncio del cambio de pantalla es P8).
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> onScreenChanged()
+            // Pantalla o diálogo nuevo: se reinicia el estado dependiente de la
+            // pantalla y se anuncia el título de la nueva pantalla (P8a).
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                onScreenChanged()
+                if (tutorialStep == TutorialStep.NONE) handleWindowTitle(event)
+            }
 
             // Base para P8: contenido de ventana, escritura, scroll, selección
             // y anuncios de la app. Por ahora solo se reciben.
@@ -215,6 +221,28 @@ class VidenteAccessibilityService :
     private fun onScreenChanged() {
         stopContinuousReading()
         navMode = NavMode.ELEMENT
+    }
+
+    /**
+     * P8a: anuncia el título de la pantalla nueva. Deliberadamente mínimo:
+     * el título se toma solo del texto del propio evento (no se llama a
+     * getWindows() ni se recorre el árbol), se ignora la interfaz del sistema
+     * y las ventanas del propio Vidente, no se repite el mismo título dos
+     * veces seguidas, y se aplica un pequeño retardo para que una transición
+     * que dispara varios eventos produzca un solo anuncio.
+     */
+    private fun handleWindowTitle(event: AccessibilityEvent) {
+        val pkg = event.packageName?.toString()
+        if (pkg == packageName || pkg == "com.android.systemui") return
+
+        val title = event.text?.joinToString(" ")?.trim()?.takeIf { it.isNotBlank() } ?: return
+        if (title == lastWindowTitle) return
+        lastWindowTitle = title
+
+        pendingTitleRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable { speak(title) }
+        pendingTitleRunnable = r
+        mainHandler.postDelayed(r, WINDOW_TITLE_DEBOUNCE_MS)
     }
 
     /** Lectura hablada del elemento que recibe el foco o el toque. */
@@ -1047,6 +1075,7 @@ class VidenteAccessibilityService :
 
     override fun onDestroy() {
         VidentePreferences.prefs(this).unregisterOnSharedPreferenceChangeListener(this)
+        mainHandler.removeCallbacksAndMessages(null)
         hideFloatingButton()
         tts?.stop()
         tts?.shutdown()
@@ -1077,6 +1106,8 @@ class VidenteAccessibilityService :
 
         private const val BOUNDARY_START = "Principio de la pantalla"
         private const val BOUNDARY_END = "Final de la pantalla"
+
+        private const val WINDOW_TITLE_DEBOUNCE_MS = 150L
 
         // ---- Textos del tutorial de bienvenida (P21) ----
         private const val TUTORIAL_INTRO =
