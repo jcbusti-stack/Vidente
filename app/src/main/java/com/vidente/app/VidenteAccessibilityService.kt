@@ -1060,28 +1060,81 @@ class VidenteAccessibilityService :
      * elemento se anuncia por el evento TYPE_VIEW_ACCESSIBILITY_FOCUSED que
      * dispara la acción. Al pasar del último al primero, o al revés, deja
      * pendiente un aviso de borde de pantalla.
+     *
+     * La posición actual se busca primero por el flag isAccessibilityFocused
+     * de la lista y, si no aparece (el foco puede haber caído en un hijo de
+     * una fila colapsada, p. ej. carpetas del launcher), con
+     * findFocus(FOCUS_ACCESSIBILITY) subiendo por los ancestros. Si el foco
+     * existe pero no se puede ubicar, no se mueve nada: es mejor un no-op que
+     * saltar al primer elemento (que se veía como "retrocede en vez de
+     * avanzar").
      */
     private fun moveAccessibilityFocus(forward: Boolean): Boolean {
         val root = rootInActiveWindow ?: return false
         val nodes = collectNavigable(root)
-        root.recycle()
-        if (nodes.isEmpty()) return false
-
-        val currentIndex = nodes.indexOfFirst { it.isAccessibilityFocused }
-        val lastIndex = nodes.lastIndex
-        val (targetIndex, wrapped) = when {
-            currentIndex < 0 -> (if (forward) 0 else lastIndex) to false
-            forward && currentIndex == lastIndex -> 0 to true
-            !forward && currentIndex == 0 -> lastIndex to true
-            else -> (currentIndex + if (forward) 1 else -1) to false
+        if (nodes.isEmpty()) {
+            root.recycle()
+            return false
         }
 
-        val done = nodes[targetIndex].performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
-        if (done && wrapped && targetIndex != currentIndex) {
+        var currentIndex = nodes.indexOfFirst { it.isAccessibilityFocused }
+        var focusExists = currentIndex >= 0
+        if (currentIndex < 0) {
+            val located = locateFocusInList(root, nodes)
+            currentIndex = located.first
+            focusExists = located.second
+        }
+        root.recycle()
+
+        val lastIndex = nodes.lastIndex
+        val target: Int
+        val wrapped: Boolean
+        when {
+            currentIndex < 0 && focusExists -> {
+                // Hay foco pero no sabemos dónde; no saltar.
+                nodes.forEach { it.recycle() }
+                return true
+            }
+            currentIndex < 0 -> { target = if (forward) 0 else lastIndex; wrapped = false }
+            forward && currentIndex >= lastIndex -> { target = 0; wrapped = true }
+            !forward && currentIndex <= 0 -> { target = lastIndex; wrapped = true }
+            else -> { target = currentIndex + if (forward) 1 else -1; wrapped = false }
+        }
+
+        val done = nodes[target].performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+        if (done && wrapped && target != currentIndex) {
             boundaryAnnouncement = if (forward) BOUNDARY_START else BOUNDARY_END
         }
         nodes.forEach { it.recycle() }
         return done
+    }
+
+    /**
+     * Devuelve (índice en la lista, hay foco). El índice es el del nodo con
+     * foco de accesibilidad o el de su ancestro más cercano que esté en la
+     * lista; -1 si no se ubica. "hay foco" indica si findFocus devolvió algo.
+     */
+    private fun locateFocusInList(
+        root: AccessibilityNodeInfo,
+        nodes: List<AccessibilityNodeInfo>
+    ): Pair<Int, Boolean> {
+        var node: AccessibilityNodeInfo? =
+            root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY) ?: return -1 to false
+        var depth = 0
+        while (depth < MAX_CLICKABLE_ANCESTOR_DEPTH + 2) {
+            val current = node ?: break
+            val idx = nodes.indexOfFirst { it == current }
+            if (idx >= 0) {
+                current.recycle()
+                return idx to true
+            }
+            val parent = current.parent
+            current.recycle()
+            node = parent
+            depth++
+        }
+        node?.recycle()
+        return -1 to true
     }
 
     /** Lista, en orden de lectura, los nodos visibles que Vidente sabe anunciar. */
