@@ -322,7 +322,7 @@ class VidenteAccessibilityService :
         }
         lastScrollBoundary = null
 
-        val fraction: Float? = when {
+        val fraction: Float = when {
             itemCount > 1 && fromIndex >= 0 -> fromIndex.toFloat() / (itemCount - 1)
             maxScrollY > 0 && scrollY >= 0 -> scrollY.toFloat() / maxScrollY
             maxScrollX > 0 && scrollX >= 0 -> scrollX.toFloat() / maxScrollX
