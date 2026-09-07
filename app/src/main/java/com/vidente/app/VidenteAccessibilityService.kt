@@ -40,6 +40,7 @@ class VidenteAccessibilityService :
     private var pendingText: String? = null
     // Copia del último elemento que Vidente leyó; ancla de respaldo para P5.
     private var lastFocusedNode: AccessibilityNodeInfo? = null
+    private var treeWalkBudget = 0
 
     // Aviso ("Principio/Final de la pantalla") pendiente de anteponer a la
     // próxima lectura de elemento tras envolver en la navegación lineal (P5).
@@ -1240,103 +1241,126 @@ class VidenteAccessibilityService :
 
     /**
      * Mueve el foco de accesibilidad al siguiente o anterior elemento
-     * navegable de la ventana activa con ACTION_ACCESSIBILITY_FOCUS. El
-     * elemento se anuncia por el evento TYPE_VIEW_ACCESSIBILITY_FOCUSED que
-     * dispara la acción. Al pasar del último al primero, o al revés, deja
-     * pendiente un aviso de borde de pantalla.
-     *
-     * La posición actual se busca primero por el flag isAccessibilityFocused
-     * de la lista y, si no aparece (el foco puede haber caído en un hijo de
-     * una fila colapsada, p. ej. carpetas del launcher), con
-     * findFocus(FOCUS_ACCESSIBILITY) subiendo por los ancestros. Si el foco
-     * existe pero no se puede ubicar, no se mueve nada: es mejor un no-op que
-     * saltar al primer elemento (que se veía como "retrocede en vez de
-     * avanzar").
+     * navegable. Recorre el árbol de verdad desde el elemento actual (el que
+     * tiene el foco de accesibilidad, o el último que leyó Vidente), sin lista
+     * plana ni comparación de índices: primer navegable dentro del actual, si
+     * no el siguiente hermano navegable, si no se sube al ancestro y se prueba
+     * su siguiente hermano, y así. Al agotar el árbol se envuelve al extremo y
+     * se deja pendiente el aviso de borde. Este recorrido estructural funciona
+     * también en apps (React Native: Claude, Grok) donde comparar nodos por
+     * identidad falla.
      */
+    @Suppress("DEPRECATION")
     private fun moveAccessibilityFocus(forward: Boolean): Boolean {
         val root = rootInActiveWindow ?: return false
-        val nodes = collectNavigable(root)
-        if (nodes.isEmpty()) {
-            root.recycle()
-            return false
+        var anchor: AccessibilityNodeInfo? = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        if (anchor == null) {
+            val lf = lastFocusedNode
+            if (lf != null && (try { lf.refresh() } catch (e: Exception) { false })) {
+                anchor = AccessibilityNodeInfo.obtain(lf)
+            }
         }
 
-        var currentIndex = nodes.indexOfFirst { it.isAccessibilityFocused }
-        var focusExists = currentIndex >= 0
-        if (currentIndex < 0) {
-            val located = locateFocusInList(root, nodes)
-            currentIndex = located.first
-            focusExists = located.second
+        treeWalkBudget = TREE_WALK_BUDGET
+        var wrapped = false
+        var target: AccessibilityNodeInfo? = null
+        try {
+            val a = anchor
+            if (a != null) target = treeSuccessor(a, forward)
+            if (target == null) {
+                target = firstNavigableInSubtree(root, includeSelf = false, forward = forward)
+                wrapped = a != null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "moveAccessibilityFocus: fallo recorriendo el árbol", e)
         }
+        anchor?.recycle()
         root.recycle()
 
-        val lastIndex = nodes.lastIndex
-        val target: Int
-        val wrapped: Boolean
-        when {
-            currentIndex < 0 && focusExists -> {
-                // Hay foco pero no sabemos dónde; no saltar.
-                nodes.forEach { it.recycle() }
-                return true
-            }
-            currentIndex < 0 -> { target = if (forward) 0 else lastIndex; wrapped = false }
-            forward && currentIndex >= lastIndex -> { target = 0; wrapped = true }
-            !forward && currentIndex <= 0 -> { target = lastIndex; wrapped = true }
-            else -> { target = currentIndex + if (forward) 1 else -1; wrapped = false }
-        }
-
-        val done = nodes[target].performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
-        if (done && wrapped && target != currentIndex) {
-            boundaryAnnouncement = if (forward) BOUNDARY_START else BOUNDARY_END
-        }
-        nodes.forEach { it.recycle() }
+        val t = target ?: return false
+        val done = t.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+        if (done && wrapped) boundaryAnnouncement = if (forward) BOUNDARY_START else BOUNDARY_END
+        t.recycle()
         return done
     }
 
+    /** Sucesor (o predecesor) navegable de `from` en orden de lectura, o null si se agota el árbol. */
+    @Suppress("DEPRECATION")
+    private fun treeSuccessor(from: AccessibilityNodeInfo, forward: Boolean): AccessibilityNodeInfo? {
+        firstNavigableInSubtree(from, includeSelf = false, forward = forward)?.let { return it }
+
+        var cur: AccessibilityNodeInfo? = AccessibilityNodeInfo.obtain(from)
+        var climbed = 0
+        while (climbed < TREE_CLIMB_DEPTH) {
+            val current = cur ?: break
+            val parent = current.parent
+            if (parent == null) {
+                current.recycle()
+                return null
+            }
+            val idx = indexInParent(parent, current)
+            if (idx >= 0) {
+                val range = if (forward) (idx + 1) until parent.childCount else (idx - 1) downTo 0
+                for (i in range) {
+                    if (treeWalkBudget-- <= 0) {
+                        parent.recycle(); current.recycle(); return null
+                    }
+                    val sib = parent.getChild(i) ?: continue
+                    if (isNavigable(sib)) {
+                        parent.recycle(); current.recycle(); return sib
+                    }
+                    val inner = firstNavigableInSubtree(sib, includeSelf = false, forward = forward)
+                    sib.recycle()
+                    if (inner != null) {
+                        parent.recycle(); current.recycle(); return inner
+                    }
+                }
+            }
+            current.recycle()
+            cur = parent
+            climbed++
+        }
+        cur?.recycle()
+        return null
+    }
+
     /**
-     * Devuelve (índice en la lista, hay foco). Prueba dos anclas: el nodo con
-     * foco de accesibilidad de verdad (findFocus) y, si falla, la última copia
-     * del elemento que Vidente leyó (lastFocusedNode, refrescada). De cada una
-     * sube por los ancestros hasta dar con un nodo que esté en la lista. Hace
-     * falta la segunda ancla en apps que no aceptan ACTION_ACCESSIBILITY_FOCUS
-     * (React Native, WebView), como el menú lateral de la app de Claude.
+     * Primer navegable dentro del subárbol de `node` en orden de lectura.
+     * forward=true: se comprueba el nodo y luego los hijos 0..n. forward=false:
+     * los hijos de n..0 y luego el nodo. Devuelve una copia (el llamador la
+     * recicla) o null.
      */
     @Suppress("DEPRECATION")
-    private fun locateFocusInList(
-        root: AccessibilityNodeInfo,
-        nodes: List<AccessibilityNodeInfo>
-    ): Pair<Int, Boolean> {
-        val anchors = mutableListOf<AccessibilityNodeInfo>()
-        root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)?.let { anchors.add(it) }
-        lastFocusedNode?.let { lf ->
-            if (try { lf.refresh() } catch (e: Exception) { false }) {
-                anchors.add(AccessibilityNodeInfo.obtain(lf))
-            }
-        }
-        if (anchors.isEmpty()) return -1 to false
+    private fun firstNavigableInSubtree(
+        node: AccessibilityNodeInfo,
+        includeSelf: Boolean = true,
+        forward: Boolean = true
+    ): AccessibilityNodeInfo? {
+        if (treeWalkBudget-- <= 0) return null
 
-        try {
-            for (anchor in anchors) {
-                var node: AccessibilityNodeInfo? = AccessibilityNodeInfo.obtain(anchor)
-                var depth = 0
-                while (depth < ANCESTOR_SEARCH_DEPTH) {
-                    val current = node ?: break
-                    val idx = nodes.indexOfFirst { it == current }
-                    if (idx >= 0) {
-                        current.recycle()
-                        return idx to true
-                    }
-                    val parent = current.parent
-                    current.recycle()
-                    node = parent
-                    depth++
-                }
-                node?.recycle()
-            }
-        } finally {
-            anchors.forEach { it.recycle() }
+        if (forward && includeSelf && isNavigable(node)) return AccessibilityNodeInfo.obtain(node)
+
+        val range = if (forward) 0 until node.childCount else (node.childCount - 1) downTo 0
+        for (i in range) {
+            val child = node.getChild(i) ?: continue
+            val r = firstNavigableInSubtree(child, includeSelf = true, forward = forward)
+            child.recycle()
+            if (r != null) return r
         }
-        return -1 to true
+
+        if (!forward && includeSelf && isNavigable(node)) return AccessibilityNodeInfo.obtain(node)
+        return null
+    }
+
+    @Suppress("DEPRECATION")
+    private fun indexInParent(parent: AccessibilityNodeInfo, child: AccessibilityNodeInfo): Int {
+        for (i in 0 until parent.childCount) {
+            val c = parent.getChild(i) ?: continue
+            val match = c == child
+            c.recycle()
+            if (match) return i
+        }
+        return -1
     }
 
     /** Lista, en orden de lectura, los nodos visibles que Vidente sabe anunciar. */
@@ -1570,9 +1594,10 @@ class VidenteAccessibilityService :
         private const val MAX_LINES = 60
         private const val MAX_SUMMARY_CHARS = 4000
         private const val MAX_NAV_NODES = 300
-        // Niveles de ancestros que se suben buscando el elemento actual en la
-        // lista (los árboles de React Native / WebView anidan mucho).
-        private const val ANCESTOR_SEARCH_DEPTH = 20
+        // Recorrido del árbol para siguiente/anterior: tope de nodos visitados
+        // y de niveles que se suben, para no colgarse en árboles enormes.
+        private const val TREE_WALK_BUDGET = 5000
+        private const val TREE_CLIMB_DEPTH = 40
         private const val MAX_ALL_NODES = 500
 
         // Gestos que alternan estado o ciclan: se ignora una repetición del
