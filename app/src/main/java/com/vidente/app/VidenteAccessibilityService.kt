@@ -13,6 +13,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -37,6 +40,7 @@ class VidenteAccessibilityService :
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var lastSpoken: String? = null
+    private var lastSpokenAt = 0L
     private var pendingText: String? = null
     // Copia del último elemento que Vidente leyó; ancla de respaldo para P5.
     private var lastFocusedNode: AccessibilityNodeInfo? = null
@@ -59,6 +63,22 @@ class VidenteAccessibilityService :
     // que disparan algunas apps y teclados en un elemento vecino, que hacía
     // saltar la lectura a otra tecla o a otro icono.
     private var lastHoverAt = 0L
+
+    // Vibración corta al posar el dedo sobre un elemento: confirmación táctil
+    // de que hay algo debajo, además del anuncio hablado.
+    private val vibrator: Vibrator? by lazy {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getSystemService(VIBRATOR_SERVICE) as Vibrator
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "No hay vibrador disponible", e)
+            null
+        }
+    }
     // Momento del último evento de scroll "de en medio" (ni principio ni fin).
     // Solo se anuncia un borde si hubo uno reciente: así el salto que hace una
     // app al abrir (Telegram al último mensaje) no dispara "principio/final".
@@ -678,6 +698,7 @@ class VidenteAccessibilityService :
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER) {
             lastHoverAt = now
             interactedSinceScreenChange = true
+            vibrateTick()
         }
 
         // Vidente gestiona el foco de accesibilidad: al leer un elemento por
@@ -712,12 +733,17 @@ class VidenteAccessibilityService :
         // texto con el anterior.
         val boundary = boundaryAnnouncement
         boundaryAnnouncement = null
-        if (text == lastSpoken && boundary == null) {
+        // La deduplicación solo vale un instante: al escribir rápido se tocan
+        // dos veces seguidas la misma tecla y ambas deben oírse.
+        if (text == lastSpoken && boundary == null &&
+            now - lastSpokenAt < REPEAT_SPEECH_AFTER_MS
+        ) {
             if (editable) onKeyboardEventSeen()
             return
         }
 
         lastSpoken = text
+        lastSpokenAt = now
         val toSpeak = if (boundary != null) "$boundary. $text" else text
         if (ttsReady) speak(toSpeak) else pendingText = toSpeak
 
@@ -726,6 +752,27 @@ class VidenteAccessibilityService :
         if (editable) onKeyboardEventSeen()
 
         if (tutorialStep == TutorialStep.EXPLORE) onExplorePracticed()
+    }
+
+    /**
+     * Pulso táctil muy corto al posar el dedo sobre un elemento. Sirve de
+     * confirmación de que hay algo debajo del dedo, sin esperar a la voz.
+     */
+    private fun vibrateTick() {
+        val v = vibrator ?: return
+        try {
+            if (!v.hasVibrator()) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(
+                    VibrationEffect.createOneShot(HOVER_VIBRATION_MS, HOVER_VIBRATION_AMPLITUDE)
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                v.vibrate(HOVER_VIBRATION_MS)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Fallo al vibrar", e)
+        }
     }
 
     /**
@@ -1620,7 +1667,27 @@ class VidenteAccessibilityService :
      * sobre la fila), se sube por el árbol hasta el primer ancestro clickeable
      * y se le manda ACTION_CLICK.
      */
+    @Suppress("DEPRECATION")
     private fun activateFocusedElement(): Boolean {
+        // El elemento que Vidente acaba de leer bajo el dedo manda sobre
+        // findFocus(): en los teclados, el propio IME mueve el foco de
+        // accesibilidad a una tecla vecina entre el toque y el doble toque, y
+        // se escribía otra letra. Solo se usa si sigue siendo válido.
+        val hovered = lastFocusedNode
+        val fresh = hovered != null &&
+            SystemClock.uptimeMillis() - lastHoverAt < HOVER_OWNS_FOCUS_MS &&
+            (try { hovered.refresh() } catch (e: Exception) { false })
+        if (fresh && hovered != null) {
+            val copy = try { AccessibilityNodeInfo.obtain(hovered) } catch (e: Exception) { null }
+            if (copy != null) {
+                val t = nearestClickable(copy)
+                val ok = t?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
+                if (t != null && t != copy) t.recycle()
+                copy.recycle()
+                if (ok) return true
+            }
+        }
+
         val root = rootInActiveWindow ?: return false
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         root.recycle()
@@ -1834,6 +1901,13 @@ class VidenteAccessibilityService :
         private const val SCROLL_AFTER_SCREEN_CHANGE_GUARD_MS = 700L
         private const val BOUNDARY_NEEDS_RECENT_MID_MS = 1500L
         private const val HOVER_OWNS_FOCUS_MS = 1200L
+        // Vibración de exploración: muy corta y suave, para que no moleste al
+        // recorrer la pantalla ni se solape con la voz.
+        private const val HOVER_VIBRATION_MS = 18L
+        private const val HOVER_VIBRATION_AMPLITUDE = 60   // 1..255
+        // Un mismo texto se puede repetir pasado este tiempo: al escribir
+        // rápido, tocar dos veces la misma tecla debe anunciarse dos veces.
+        private const val REPEAT_SPEECH_AFTER_MS = 350L
 
         // Apps de mensajería: el campo de escribir se anuncia como "mensaje,
         // cuadro de edición" en vez de solo "cuadro de edición".
