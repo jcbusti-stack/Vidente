@@ -982,6 +982,9 @@ class VidenteAccessibilityService :
         tts?.speak(text, mode, null, TUTORIAL_UTTERANCE_ID)
     }
 
+    /** Une varias cadenas del tutorial con un espacio. */
+    private fun tut(vararg res: Int): String = res.joinToString(" ") { getString(it) }
+
     // ---- Modo conversacional ----
 
     private fun showFloatingButton() {
@@ -1779,20 +1782,22 @@ class VidenteAccessibilityService :
         pendingTutorial = false
         practicedGestures.clear()
         tutorialStep = TutorialStep.EXPLORE
-        speakTutorial("$TUTORIAL_INTRO $TUTORIAL_EXPLORE")
+        speakTutorial(tut(R.string.tutorial_intro, R.string.tutorial_explore))
     }
 
     private fun onExplorePracticed() {
         if (!tutorialInputEnabled) return
         tutorialStep = TutorialStep.DOUBLE_TAP
-        speakTutorial("$TUTORIAL_EXPLORE_OK $TUTORIAL_DOUBLE_TAP", flush = false)
+        speakTutorial(tut(R.string.tutorial_explore_ok, R.string.tutorial_double_tap), flush = false)
     }
 
     private fun onDoubleTapPracticed() {
         if (tutorialStep != TutorialStep.DOUBLE_TAP || !tutorialInputEnabled) return
         tutorialStep = TutorialStep.NAVIGATE
         practicedGestures.clear()
-        speakTutorial("$TUTORIAL_DOUBLE_TAP_OK $TUTORIAL_NAVIGATE $TUTORIAL_NAVIGATE_FIRST")
+        speakTutorial(
+            tut(R.string.tutorial_double_tap_ok, R.string.tutorial_navigate, R.string.tutorial_navigate_first)
+        )
     }
 
     private fun handleTutorialGesture(gestureId: Int): Boolean {
@@ -1815,20 +1820,21 @@ class VidenteAccessibilityService :
         if (gestureId !in NAVIGATE_GESTURES) return
 
         val firstTime = practicedGestures.add(gestureId)
-        val ok = if (gestureId == GESTURE_SWIPE_RIGHT) "Bien, elemento siguiente." else "Bien, elemento anterior."
+        val ok = getString(
+            if (gestureId == GESTURE_SWIPE_RIGHT) R.string.tutorial_nav_ok_next else R.string.tutorial_nav_ok_prev
+        )
 
         if (practicedGestures.containsAll(NAVIGATE_GESTURES)) {
             practicedGestures.clear()
             tutorialStep = TutorialStep.SYSTEM
-            speakTutorial("$ok $TUTORIAL_SYSTEM $TUTORIAL_SYSTEM_FIRST")
+            speakTutorial("$ok " + tut(R.string.tutorial_system, R.string.tutorial_system_first))
             return
         }
 
-        val next = if (GESTURE_SWIPE_RIGHT !in practicedGestures) {
-            "Ahora desliza a la derecha para ir al siguiente."
-        } else {
-            "Ahora desliza a la izquierda para volver al anterior."
-        }
+        val next = getString(
+            if (GESTURE_SWIPE_RIGHT !in practicedGestures) R.string.tutorial_nav_next_right
+            else R.string.tutorial_nav_next_left
+        )
         speakTutorial(if (firstTime) "$ok $next" else next)
     }
 
@@ -1836,27 +1842,28 @@ class VidenteAccessibilityService :
         if (gestureId !in SYSTEM_GESTURES) return
 
         val firstTime = practicedGestures.add(gestureId)
-        val ok = when (gestureId) {
-            GESTURE_SWIPE_UP -> "Bien, eso es Inicio."
-            GESTURE_SWIPE_DOWN_AND_LEFT -> "Bien, eso es Atrás."
-            else -> "Bien, eso es Recientes."
-        }
+        val ok = getString(
+            when (gestureId) {
+                GESTURE_SWIPE_UP -> R.string.tutorial_sys_ok_home
+                GESTURE_SWIPE_DOWN_AND_LEFT -> R.string.tutorial_sys_ok_back
+                else -> R.string.tutorial_sys_ok_recents
+            }
+        )
 
         if (practicedGestures.containsAll(SYSTEM_GESTURES)) {
             practicedGestures.clear()
             tutorialStep = TutorialStep.READING
-            speakTutorial("$ok $TUTORIAL_READING $TUTORIAL_READING_FIRST")
+            speakTutorial("$ok " + tut(R.string.tutorial_reading, R.string.tutorial_reading_first))
             return
         }
 
-        val next = when {
-            GESTURE_SWIPE_UP !in practicedGestures ->
-                "Ahora desliza hacia arriba para Inicio."
-            GESTURE_SWIPE_DOWN_AND_LEFT !in practicedGestures ->
-                "Ahora desliza hacia abajo y luego a la izquierda para Atrás."
-            else ->
-                "Ahora desliza hacia abajo y luego a la derecha para Recientes."
-        }
+        val next = getString(
+            when {
+                GESTURE_SWIPE_UP !in practicedGestures -> R.string.tutorial_sys_next_home
+                GESTURE_SWIPE_DOWN_AND_LEFT !in practicedGestures -> R.string.tutorial_sys_next_back
+                else -> R.string.tutorial_sys_next_recents
+            }
+        )
         speakTutorial(if (firstTime) "$ok $next" else next)
     }
 
@@ -1864,24 +1871,22 @@ class VidenteAccessibilityService :
         if (gestureId !in READING_GESTURES) return
 
         val firstTime = practicedGestures.add(gestureId)
-        val ok = if (gestureId == GESTURE_SWIPE_DOWN_AND_UP) {
-            "Bien, así se empieza a leer de corrido."
-        } else {
-            "Bien, así se repite la última frase."
-        }
+        val ok = getString(
+            if (gestureId == GESTURE_SWIPE_DOWN_AND_UP) R.string.tutorial_reading_ok_start
+            else R.string.tutorial_reading_ok_repeat
+        )
 
         if (practicedGestures.containsAll(READING_GESTURES)) {
             practicedGestures.clear()
             tutorialStep = TutorialStep.MODES
-            speakTutorial("$ok $TUTORIAL_MODES $TUTORIAL_MODES_FIRST")
+            speakTutorial("$ok " + tut(R.string.tutorial_modes, R.string.tutorial_modes_first))
             return
         }
 
-        val next = if (GESTURE_SWIPE_DOWN_AND_UP !in practicedGestures) {
-            "Ahora desliza hacia abajo y vuelve arriba sin levantar el dedo, para empezar a leer de corrido."
-        } else {
-            "Ahora desliza hacia arriba y vuelve abajo sin levantar el dedo, para repetir la última frase."
-        }
+        val next = getString(
+            if (GESTURE_SWIPE_DOWN_AND_UP !in practicedGestures) R.string.tutorial_reading_next_start
+            else R.string.tutorial_reading_next_repeat
+        )
         speakTutorial(if (firstTime) "$ok $next" else next)
     }
 
@@ -1891,7 +1896,7 @@ class VidenteAccessibilityService :
         tutorialStep = TutorialStep.NONE
         practicedGestures.clear()
         VidentePreferences.setTutorialDone(this, true)
-        speakTutorial("Bien, así se cambia de modo. $TUTORIAL_DONE")
+        speakTutorial(tut(R.string.tutorial_modes_ok, R.string.tutorial_done))
     }
 
     override fun onInterrupt() {
@@ -1991,52 +1996,5 @@ class VidenteAccessibilityService :
         private const val DIALOG_SCAN_DEPTH = 8
         private const val DIALOG_SCAN_MAX_NODES = 120
         private const val DIALOG_MAX_TREE_NODES = 40
-
-        // ---- Textos del tutorial de bienvenida (P21) ----
-        private const val TUTORIAL_INTRO =
-            "Bienvenido a Vidente. Vamos a practicar los gestos, uno a uno. " +
-                "Puedes repetir este tutorial cuando quieras desde Ajustes."
-        private const val TUTORIAL_EXPLORE =
-            "Primer gesto: explorar. Apoya un dedo en la pantalla y muévelo despacio. " +
-                "Vidente te irá leyendo lo que hay bajo tu dedo, sin activar nada. " +
-                "Pruébalo ahora: toca cualquier parte de la pantalla."
-        private const val TUTORIAL_EXPLORE_OK = "Muy bien. Eso es explorar."
-        private const val TUTORIAL_DOUBLE_TAP =
-            "Segundo gesto: activar. Da dos toques rápidos en cualquier parte de la pantalla. " +
-                "No hace falta tocar justo encima del elemento: se activa el último que Vidente leyó. " +
-                "Pruébalo ahora: dos toques rápidos."
-        private const val TUTORIAL_DOUBLE_TAP_OK = "Muy bien. Eso es activar."
-        private const val TUTORIAL_NAVIGATE =
-            "Tercer gesto: moverte por la pantalla, elemento por elemento. " +
-                "Desliza un dedo a la derecha para ir al elemento siguiente, " +
-                "y a la izquierda para volver al anterior. " +
-                "Vidente te leerá cada elemento al llegar. Vamos a probar los dos."
-        private const val TUTORIAL_NAVIGATE_FIRST =
-            "Empieza deslizando a la derecha para ir al siguiente."
-        private const val TUTORIAL_SYSTEM =
-            "Cuarto y último gesto: la barra del sistema. " +
-                "Desliza hacia arriba para ir a Inicio. " +
-                "Desliza hacia abajo y luego a la izquierda, en un solo movimiento, para Atrás. " +
-                "Y hacia abajo y luego a la derecha para Recientes. Vamos a probar los tres."
-        private const val TUTORIAL_SYSTEM_FIRST =
-            "Empieza deslizando hacia arriba para Inicio."
-        private const val TUTORIAL_READING =
-            "Quinto gesto: leer de corrido. Desliza hacia abajo y vuelve arriba sin levantar " +
-                "el dedo, y Vidente empezará a leer desde donde estás hasta el final. " +
-                "Un toque en la pantalla lo pausa; el mismo gesto de abajo y arriba lo reanuda. " +
-                "Y deslizando hacia arriba y volviendo abajo se repite la última frase. " +
-                "Vamos a probar esos dos."
-        private const val TUTORIAL_READING_FIRST =
-            "Empieza deslizando hacia abajo y volviendo arriba sin levantar el dedo."
-        private const val TUTORIAL_MODES =
-            "Sexto y último gesto: cambiar de modo. Deslizando hacia abajo, recto, se va " +
-                "cambiando entre modos: elemento, carácter, palabra, línea, párrafo, encabezados, " +
-                "enlaces, controles y campos. Vidente dice el modo al cambiar. Luego, deslizar a " +
-                "la derecha o a la izquierda te mueve según el modo elegido."
-        private const val TUTORIAL_MODES_FIRST =
-            "Pruébalo ahora: desliza hacia abajo, recto."
-        private const val TUTORIAL_DONE =
-            "El tutorial terminó. Puedes repetirlo cuando quieras desde Ajustes, con el botón " +
-                "Repetir tutorial."
     }
 }

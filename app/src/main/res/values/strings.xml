@@ -66,6 +66,37 @@
     <string name="nav_mode_link">enlaces</string>
     <string name="nav_mode_control">controles</string>
     <string name="nav_mode_field">campos</string>
+
+    <!-- ===== Tutorial de bienvenida ===== -->
+    <string name="tutorial_intro">Bienvenido a Vidente. Vamos a practicar los gestos, uno a uno. Puedes repetir este tutorial cuando quieras desde Ajustes.</string>
+    <string name="tutorial_explore">Primer gesto: explorar. Apoya un dedo en la pantalla y muévelo despacio. Vidente te irá leyendo lo que hay bajo tu dedo, sin activar nada. Pruébalo ahora: toca cualquier parte de la pantalla.</string>
+    <string name="tutorial_explore_ok">Muy bien. Eso es explorar.</string>
+    <string name="tutorial_double_tap">Segundo gesto: activar. Da dos toques rápidos en cualquier parte de la pantalla. No hace falta tocar justo encima del elemento: se activa el último que Vidente leyó. Pruébalo ahora: dos toques rápidos.</string>
+    <string name="tutorial_double_tap_ok">Muy bien. Eso es activar.</string>
+    <string name="tutorial_navigate">Tercer gesto: moverte por la pantalla, elemento por elemento. Desliza un dedo a la derecha para ir al elemento siguiente, y a la izquierda para volver al anterior. Vidente te leerá cada elemento al llegar. Vamos a probar los dos.</string>
+    <string name="tutorial_navigate_first">Empieza deslizando a la derecha para ir al siguiente.</string>
+    <string name="tutorial_system">Cuarto y último gesto: la barra del sistema. Desliza hacia arriba para ir a Inicio. Desliza hacia abajo y luego a la izquierda, en un solo movimiento, para Atrás. Y hacia abajo y luego a la derecha para Recientes. Vamos a probar los tres.</string>
+    <string name="tutorial_system_first">Empieza deslizando hacia arriba para Inicio.</string>
+    <string name="tutorial_reading">Quinto gesto: leer de corrido. Desliza hacia abajo y vuelve arriba sin levantar el dedo, y Vidente empezará a leer desde donde estás hasta el final. Un toque en la pantalla lo pausa; el mismo gesto de abajo y arriba lo reanuda. Y deslizando hacia arriba y volviendo abajo se repite la última frase. Vamos a probar esos dos.</string>
+    <string name="tutorial_reading_first">Empieza deslizando hacia abajo y volviendo arriba sin levantar el dedo.</string>
+    <string name="tutorial_modes">Sexto y último gesto: cambiar de modo. Deslizando hacia abajo, recto, se va cambiando entre modos: elemento, carácter, palabra, línea, párrafo, encabezados, enlaces, controles y campos. Vidente dice el modo al cambiar. Luego, deslizar a la derecha o a la izquierda te mueve según el modo elegido.</string>
+    <string name="tutorial_modes_first">Pruébalo ahora: desliza hacia abajo, recto.</string>
+    <string name="tutorial_done">El tutorial terminó. Puedes repetirlo cuando quieras desde Ajustes, con el botón Repetir tutorial.</string>
+    <string name="tutorial_nav_ok_next">Bien, elemento siguiente.</string>
+    <string name="tutorial_nav_ok_prev">Bien, elemento anterior.</string>
+    <string name="tutorial_nav_next_right">Ahora desliza a la derecha para ir al siguiente.</string>
+    <string name="tutorial_nav_next_left">Ahora desliza a la izquierda para volver al anterior.</string>
+    <string name="tutorial_sys_ok_home">Bien, eso es Inicio.</string>
+    <string name="tutorial_sys_ok_back">Bien, eso es Atrás.</string>
+    <string name="tutorial_sys_ok_recents">Bien, eso es Recientes.</string>
+    <string name="tutorial_sys_next_home">Ahora desliza hacia arriba para Inicio.</string>
+    <string name="tutorial_sys_next_back">Ahora desliza hacia abajo y luego a la izquierda para Atrás.</string>
+    <string name="tutorial_sys_next_recents">Ahora desliza hacia abajo y luego a la derecha para Recientes.</string>
+    <string name="tutorial_reading_ok_start">Bien, así se empieza a leer de corrido.</string>
+    <string name="tutorial_reading_ok_repeat">Bien, así se repite la última frase.</string>
+    <string name="tutorial_reading_next_start">Ahora desliza hacia abajo y vuelve arriba sin levantar el dedo, para empezar a leer de corrido.</string>
+    <string name="tutorial_reading_next_repeat">Ahora desliza hacia arriba y vuelve abajo sin levantar el dedo, para repetir la última frase.</string>
+    <string name="tutorial_modes_ok">Bien, así se cambia de modo.</string>
     <string name="settings_rate_label">Velocidad de voz</string>
     <string name="settings_rate_value">Velocidad: %1$.2fx</string>
     <string name="settings_pitch_label">Tono de voz</string>
