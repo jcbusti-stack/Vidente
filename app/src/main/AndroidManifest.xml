@@ -33,9 +33,11 @@
             </intent-filter>
         </activity>
 
+        <!-- exported: lo abre la app de Ajustes del sistema desde la pantalla
+             de accesibilidad de Vidente (android:settingsActivity). -->
         <activity
             android:name=".SettingsActivity"
-            android:exported="false"
+            android:exported="true"
             android:label="@string/settings_title" />
 
         <activity
