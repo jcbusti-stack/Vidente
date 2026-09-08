@@ -1141,7 +1141,12 @@ class VidenteAccessibilityService :
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && gestureId == GESTURE_DOUBLE_TAP) {
-            return activateFocusedElement()
+            activateFocusedElement()
+            // El doble toque se consume SIEMPRE. Si se devolvía false, el
+            // sistema entregaba el toque en crudo a la app: sobre la tecla de
+            // borrar eso equivalía a dejarla pulsada y se disparaba el borrado
+            // repetido ("tecla trabada").
+            return true
         }
 
         // Cualquier otro gesto releva al dedo: a partir de aquí los eventos de
