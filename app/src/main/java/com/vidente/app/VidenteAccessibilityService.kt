@@ -259,11 +259,7 @@ class VidenteAccessibilityService :
         refreshImePackages()
         refreshScrollFeedback()
         ensureSoundPool()
-        // DIAGNÓSTICO build 61: el botón flotante del modo conversacional es
-        // una ventana superpuesta (TYPE_ACCESSIBILITY_OVERLAY) y es lo único
-        // que distingue a Vidente de TalkBack/Jieshuo. Se desactiva para ver
-        // si es la causa del desfase dedo/elemento. Restaurar si no lo es.
-        // showFloatingButton()
+        showFloatingButton()
 
         // Tutorial de bienvenida la primera vez que se activa el servicio.
         // Se marca como visto al arrancarlo para no repetirlo en cada
@@ -680,16 +676,19 @@ class VidenteAccessibilityService :
 
         val now = SystemClock.uptimeMillis()
 
-        // Mientras el usuario explora con el dedo, el toque manda. Un
-        // TYPE_VIEW_FOCUSED (foco de entrada) que llega justo después de un
-        // hover suele venir de la app o el teclado enfocando un elemento
-        // vecino, y hacía que la lectura y la activación saltaran a otra tecla
-        // o a otro icono. Se ignora por completo durante ese margen.
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED &&
-            now - lastHoverAt < HOVER_OWNS_FOCUS_MS
-        ) {
-            return
-        }
+        // Mientras el usuario explora con el dedo, el toque manda: solo los
+        // eventos de hover deciden qué elemento es el actual.
+        //
+        // Los de foco (de entrada y de accesibilidad) que llegan justo después
+        // vienen de la app o del teclado moviendo el foco a un elemento vecino,
+        // y hacían que la lectura y, sobre todo, la activación saltaran a otra
+        // tecla (tocar "V" y escribir la de arriba). El evento de foco de
+        // accesibilidad que provoca el propio Vidente sobre el elemento
+        // correcto también cae aquí, pero es redundante: ese elemento ya se
+        // anunció desde el hover.
+        val isFocusEvent = event.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED ||
+            event.eventType == AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED
+        if (isFocusEvent && now - lastHoverAt < HOVER_OWNS_FOCUS_MS) return
 
         val node = event.source ?: return
 
@@ -1129,6 +1128,11 @@ class VidenteAccessibilityService :
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && gestureId == GESTURE_DOUBLE_TAP) {
             return activateFocusedElement()
         }
+
+        // Cualquier otro gesto releva al dedo: a partir de aquí los eventos de
+        // foco vuelven a mandar (si no, tras explorar, el elemento al que salta
+        // "siguiente/anterior" no se leería durante el margen del hover).
+        lastHoverAt = 0L
 
         when (gestureId) {
             GESTURE_SWIPE_DOWN_AND_UP -> {
@@ -1903,8 +1907,8 @@ class VidenteAccessibilityService :
         private const val HOVER_OWNS_FOCUS_MS = 1200L
         // Vibración de exploración: muy corta y suave, para que no moleste al
         // recorrer la pantalla ni se solape con la voz.
-        private const val HOVER_VIBRATION_MS = 18L
-        private const val HOVER_VIBRATION_AMPLITUDE = 60   // 1..255
+        private const val HOVER_VIBRATION_MS = 28L
+        private const val HOVER_VIBRATION_AMPLITUDE = 160  // 1..255
         // Un mismo texto se puede repetir pasado este tiempo: al escribir
         // rápido, tocar dos veces la misma tecla debe anunciarse dos veces.
         private const val REPEAT_SPEECH_AFTER_MS = 350L
