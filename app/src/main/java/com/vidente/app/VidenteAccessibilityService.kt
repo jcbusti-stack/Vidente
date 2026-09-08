@@ -239,7 +239,11 @@ class VidenteAccessibilityService :
         refreshImePackages()
         refreshScrollFeedback()
         ensureSoundPool()
-        showFloatingButton()
+        // DIAGNÓSTICO build 61: el botón flotante del modo conversacional es
+        // una ventana superpuesta (TYPE_ACCESSIBILITY_OVERLAY) y es lo único
+        // que distingue a Vidente de TalkBack/Jieshuo. Se desactiva para ver
+        // si es la causa del desfase dedo/elemento. Restaurar si no lo es.
+        // showFloatingButton()
 
         // Tutorial de bienvenida la primera vez que se activa el servicio.
         // Se marca como visto al arrancarlo para no repetirlo en cada
