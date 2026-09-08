@@ -12,235 +12,53 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="24dp"
+            android:accessibilityHeading="true"
             android:text="@string/settings_title"
             android:textSize="20sp"
             android:textStyle="bold" />
 
-        <!-- ===== Voz ===== -->
-        <TextView
-            android:layout_width="wrap_content"
+        <Button
+            android:id="@+id/buttonSectionVoice"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            android:accessibilityHeading="true"
-            android:text="@string/settings_section_voice"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/settings_rate_label"
-            android:textSize="16sp" />
-
-        <TextView
-            android:id="@+id/textRateValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:accessibilityLiveRegion="polite"
-            android:textSize="14sp" />
-
-        <SeekBar
-            android:id="@+id/seekRate"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:contentDescription="@string/settings_rate_label" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/settings_pitch_label"
-            android:textSize="16sp" />
-
-        <TextView
-            android:id="@+id/textPitchValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:accessibilityLiveRegion="polite"
-            android:textSize="14sp" />
-
-        <SeekBar
-            android:id="@+id/seekPitch"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:contentDescription="@string/settings_pitch_label" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/settings_voice_label"
-            android:textSize="16sp" />
-
-        <Spinner
-            android:id="@+id/spinnerVoice"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:contentDescription="@string/settings_voice_label" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/settings_audio_output_label"
-            android:textSize="16sp" />
-
-        <Spinner
-            android:id="@+id/spinnerAudioOutput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:contentDescription="@string/settings_audio_output_label" />
+            android:text="@string/settings_section_voice" />
 
         <Button
-            android:id="@+id/buttonPreview"
+            android:id="@+id/buttonSectionTyping"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:text="@string/settings_preview_button" />
-
-        <!-- ===== Escritura ===== -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
             android:layout_marginBottom="12dp"
-            android:accessibilityHeading="true"
-            android:text="@string/settings_section_typing"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/settings_typing_echo_label"
-            android:textSize="16sp" />
-
-        <Spinner
-            android:id="@+id/spinnerTypingEcho"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:contentDescription="@string/settings_typing_echo_label" />
-
-        <!-- ===== Sonido y vibración ===== -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="12dp"
-            android:accessibilityHeading="true"
-            android:text="@string/settings_section_sound"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/settings_scroll_feedback_label"
-            android:textSize="16sp" />
-
-        <Spinner
-            android:id="@+id/spinnerScrollFeedback"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:contentDescription="@string/settings_scroll_feedback_label" />
-
-        <!-- ===== Tutorial ===== -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="12dp"
-            android:accessibilityHeading="true"
-            android:text="@string/settings_section_tutorial"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:text="@string/settings_section_typing" />
 
         <Button
-            android:id="@+id/buttonReplayTutorial"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:text="@string/settings_replay_tutorial" />
-
-        <!-- ===== Modo conversacional ===== -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="12dp"
-            android:accessibilityHeading="true"
-            android:text="@string/settings_section_conversational"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/settings_backend_url_label"
-            android:textSize="16sp" />
-
-        <EditText
-            android:id="@+id/editBackendUrl"
+            android:id="@+id/buttonSectionSound"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            android:contentDescription="@string/settings_backend_url_label"
-            android:hint="@string/settings_backend_url_hint"
-            android:inputType="textUri"
-            android:maxLines="1" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/settings_backend_key_label"
-            android:textSize="16sp" />
-
-        <EditText
-            android:id="@+id/editBackendAccessKey"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:contentDescription="@string/settings_backend_key_label"
-            android:hint="@string/settings_backend_key_hint"
-            android:inputType="textNoSuggestions"
-            android:maxLines="1" />
+            android:text="@string/settings_section_sound" />
 
         <Button
-            android:id="@+id/buttonSaveBackendConfig"
+            android:id="@+id/buttonSectionTutorial"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:text="@string/settings_backend_save" />
-
-        <!-- ===== General ===== -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
             android:layout_marginBottom="12dp"
-            android:accessibilityHeading="true"
-            android:text="@string/settings_section_general"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:text="@string/settings_section_tutorial" />
 
         <Button
-            android:id="@+id/buttonReset"
+            android:id="@+id/buttonSectionConversational"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="32dp"
-            android:text="@string/settings_reset_button" />
+            android:layout_marginBottom="12dp"
+            android:text="@string/settings_section_conversational" />
+
+        <Button
+            android:id="@+id/buttonSectionGeneral"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="@string/settings_section_general" />
 
     </LinearLayout>
 </ScrollView>

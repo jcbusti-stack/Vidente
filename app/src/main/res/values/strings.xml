@@ -6,12 +6,13 @@
     <string name="open_settings_screen">Ajustes de voz</string>
 
     <string name="settings_title">Ajustes de Vidente</string>
-    <string name="settings_section_voice">Voz</string>
-    <string name="settings_section_typing">Escritura</string>
-    <string name="settings_section_sound">Sonido y vibración</string>
-    <string name="settings_section_tutorial">Tutorial</string>
-    <string name="settings_section_conversational">Modo conversacional</string>
-    <string name="settings_section_general">General</string>
+    <string name="settings_section_voice">Voz y lectura</string>
+    <string name="settings_section_typing">Escritura y teclado</string>
+    <string name="settings_section_sound">Sonidos y vibración</string>
+    <string name="settings_section_tutorial">Tutorial de bienvenida</string>
+    <string name="settings_section_conversational">Asistente conversacional</string>
+    <string name="settings_section_general">Ajustes generales</string>
+    <string name="settings_back">Volver a Ajustes</string>
     <string name="settings_rate_label">Velocidad de voz</string>
     <string name="settings_rate_value">Velocidad: %1$.2fx</string>
     <string name="settings_pitch_label">Tono de voz</string>
@@ -20,6 +21,7 @@
     <string name="settings_voice_auto">Voz recomendada (automática)</string>
     <string name="settings_preview_button">Probar voz</string>
     <string name="settings_reset_button">Restablecer valores</string>
+    <string name="settings_reset_done">Valores restablecidos</string>
     <string name="settings_preview_text">Así sonará Vidente al leer los elementos en pantalla.</string>
     <string name="settings_replay_tutorial">Repetir tutorial</string>
     <string name="settings_replay_tutorial_started">El tutorial va a empezar. Escucha las instrucciones de Vidente.</string>

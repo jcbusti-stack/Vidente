@@ -1,311 +1,34 @@
 package com.vidente.app
 
-import android.media.AudioAttributes
+import android.content.Intent
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
-import android.speech.tts.Voice
-import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.EditText
-import android.widget.SeekBar
-import android.widget.Spinner
-import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import java.util.Locale
 
-class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
-
-    private var tts: TextToSpeech? = null
-    private var ttsReady = false
-    private var availableVoices: List<Voice> = emptyList()
-
-    private lateinit var seekRate: SeekBar
-    private lateinit var textRateValue: TextView
-    private lateinit var seekPitch: SeekBar
-    private lateinit var textPitchValue: TextView
-    private lateinit var spinnerVoice: Spinner
-    private lateinit var spinnerAudioOutput: Spinner
-    private lateinit var spinnerScrollFeedback: Spinner
-    private lateinit var spinnerTypingEcho: Spinner
-
-    private val audioOutputValues = listOf(
-        VidentePreferences.AUDIO_OUTPUT_MEDIA,
-        VidentePreferences.AUDIO_OUTPUT_ACCESSIBILITY
-    )
-    private val scrollFeedbackValues = listOf(
-        VidentePreferences.SCROLL_FEEDBACK_TONE,
-        VidentePreferences.SCROLL_FEEDBACK_VOICE
-    )
-    private val typingEchoValues = listOf(
-        VidentePreferences.TYPING_ECHO_CHARS_WORDS,
-        VidentePreferences.TYPING_ECHO_CHARS,
-        VidentePreferences.TYPING_ECHO_WORDS,
-        VidentePreferences.TYPING_ECHO_NONE
-    )
-
-    private var currentRate = VidentePreferences.DEFAULT_RATE
-    private var currentPitch = VidentePreferences.DEFAULT_PITCH
+/**
+ * Menú de Ajustes: solo la lista de categorías. Cada una abre su propia
+ * pantalla (SettingsSectionActivity); desde ahí se vuelve aquí.
+ */
+class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
-        seekRate = findViewById(R.id.seekRate)
-        textRateValue = findViewById(R.id.textRateValue)
-        seekPitch = findViewById(R.id.seekPitch)
-        textPitchValue = findViewById(R.id.textPitchValue)
-        spinnerVoice = findViewById(R.id.spinnerVoice)
-        spinnerAudioOutput = findViewById(R.id.spinnerAudioOutput)
-        spinnerScrollFeedback = findViewById(R.id.spinnerScrollFeedback)
-        spinnerTypingEcho = findViewById(R.id.spinnerTypingEcho)
+        openSection(R.id.buttonSectionVoice, SettingsSectionActivity.SECTION_VOICE)
+        openSection(R.id.buttonSectionTyping, SettingsSectionActivity.SECTION_TYPING)
+        openSection(R.id.buttonSectionSound, SettingsSectionActivity.SECTION_SOUND)
+        openSection(R.id.buttonSectionTutorial, SettingsSectionActivity.SECTION_TUTORIAL)
+        openSection(R.id.buttonSectionConversational, SettingsSectionActivity.SECTION_CONVERSATIONAL)
+        openSection(R.id.buttonSectionGeneral, SettingsSectionActivity.SECTION_GENERAL)
+    }
 
-        currentRate = VidentePreferences.getRate(this)
-        currentPitch = VidentePreferences.getPitch(this)
-
-        setUpRateSeekBar()
-        setUpPitchSeekBar()
-        setUpAudioOutputSpinner()
-        setUpScrollFeedbackSpinner()
-        setUpTypingEchoSpinner()
-
-        findViewById<Button>(R.id.buttonPreview).setOnClickListener { previewVoice() }
-        findViewById<Button>(R.id.buttonReset).setOnClickListener { resetToDefaults() }
-        findViewById<Button>(R.id.buttonReplayTutorial).setOnClickListener {
-            VidentePreferences.setTutorialRequested(this, true)
-            Toast.makeText(this, R.string.settings_replay_tutorial_started, Toast.LENGTH_LONG).show()
+    private fun openSection(buttonId: Int, section: String) {
+        findViewById<Button>(buttonId).setOnClickListener {
+            startActivity(
+                Intent(this, SettingsSectionActivity::class.java)
+                    .putExtra(SettingsSectionActivity.EXTRA_SECTION, section)
+            )
         }
-
-        val editBackendUrl = findViewById<EditText>(R.id.editBackendUrl)
-        val editBackendAccessKey = findViewById<EditText>(R.id.editBackendAccessKey)
-        editBackendUrl.setText(VidentePreferences.getBackendUrl(this).orEmpty())
-        editBackendAccessKey.setText(VidentePreferences.getBackendAccessKey(this).orEmpty())
-        findViewById<Button>(R.id.buttonSaveBackendConfig).setOnClickListener {
-            VidentePreferences.setBackendUrl(this, editBackendUrl.text.toString())
-            VidentePreferences.setBackendAccessKey(this, editBackendAccessKey.text.toString())
-            Toast.makeText(this, R.string.settings_backend_saved, Toast.LENGTH_SHORT).show()
-        }
-
-        tts = TextToSpeech(this, this)
-    }
-
-    private fun setUpRateSeekBar() {
-        seekRate.max = SEEK_STEPS
-        seekRate.progress = rateToProgress(currentRate)
-        updateRateLabel(currentRate)
-        seekRate.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                if (!fromUser) return
-                currentRate = progressToRate(progress)
-                updateRateLabel(currentRate)
-                VidentePreferences.setRate(this@SettingsActivity, currentRate)
-            }
-
-            override fun onStartTrackingTouch(seekBar: SeekBar) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar) {}
-        })
-    }
-
-    private fun setUpPitchSeekBar() {
-        seekPitch.max = SEEK_STEPS
-        seekPitch.progress = pitchToProgress(currentPitch)
-        updatePitchLabel(currentPitch)
-        seekPitch.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                if (!fromUser) return
-                currentPitch = progressToPitch(progress)
-                updatePitchLabel(currentPitch)
-                VidentePreferences.setPitch(this@SettingsActivity, currentPitch)
-            }
-
-            override fun onStartTrackingTouch(seekBar: SeekBar) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar) {}
-        })
-    }
-
-    private fun setUpAudioOutputSpinner() {
-        val labels = listOf(
-            getString(R.string.settings_audio_output_media),
-            getString(R.string.settings_audio_output_accessibility)
-        )
-        spinnerAudioOutput.adapter =
-            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-
-        val saved = VidentePreferences.getAudioOutput(this)
-        spinnerAudioOutput.setSelection(audioOutputValues.indexOf(saved).coerceAtLeast(0))
-
-        spinnerAudioOutput.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                VidentePreferences.setAudioOutput(this@SettingsActivity, audioOutputValues[position])
-                applyAudioOutputToTts()
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
-        }
-    }
-
-    private fun setUpScrollFeedbackSpinner() {
-        val labels = listOf(
-            getString(R.string.settings_scroll_feedback_tone),
-            getString(R.string.settings_scroll_feedback_voice)
-        )
-        spinnerScrollFeedback.adapter =
-            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-
-        val saved = VidentePreferences.getScrollFeedback(this)
-        spinnerScrollFeedback.setSelection(scrollFeedbackValues.indexOf(saved).coerceAtLeast(0))
-
-        spinnerScrollFeedback.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                VidentePreferences.setScrollFeedback(this@SettingsActivity, scrollFeedbackValues[position])
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
-        }
-    }
-
-    private fun setUpTypingEchoSpinner() {
-        val labels = listOf(
-            getString(R.string.settings_typing_echo_chars_words),
-            getString(R.string.settings_typing_echo_chars),
-            getString(R.string.settings_typing_echo_words),
-            getString(R.string.settings_typing_echo_none)
-        )
-        spinnerTypingEcho.adapter =
-            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-
-        val saved = VidentePreferences.getTypingEcho(this)
-        spinnerTypingEcho.setSelection(typingEchoValues.indexOf(saved).coerceAtLeast(0))
-
-        spinnerTypingEcho.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                VidentePreferences.setTypingEcho(this@SettingsActivity, typingEchoValues[position])
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
-        }
-    }
-
-    private fun applyAudioOutputToTts() {
-        val engine = tts ?: return
-        val usage = if (VidentePreferences.getAudioOutput(this) == VidentePreferences.AUDIO_OUTPUT_ACCESSIBILITY) {
-            AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
-        } else {
-            AudioAttributes.USAGE_MEDIA
-        }
-        engine.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(usage)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
-        )
-    }
-
-    private fun updateRateLabel(rate: Float) {
-        textRateValue.text = getString(R.string.settings_rate_value, rate)
-    }
-
-    private fun updatePitchLabel(pitch: Float) {
-        textPitchValue.text = getString(R.string.settings_pitch_value, pitch)
-    }
-
-    private fun rateToProgress(rate: Float): Int = (
-        (rate - VidentePreferences.MIN_RATE) /
-            (VidentePreferences.MAX_RATE - VidentePreferences.MIN_RATE) * SEEK_STEPS
-        ).toInt()
-
-    private fun progressToRate(progress: Int): Float =
-        VidentePreferences.MIN_RATE +
-            (VidentePreferences.MAX_RATE - VidentePreferences.MIN_RATE) * (progress / SEEK_STEPS.toFloat())
-
-    private fun pitchToProgress(pitch: Float): Int = (
-        (pitch - VidentePreferences.MIN_PITCH) /
-            (VidentePreferences.MAX_PITCH - VidentePreferences.MIN_PITCH) * SEEK_STEPS
-        ).toInt()
-
-    private fun progressToPitch(progress: Int): Float =
-        VidentePreferences.MIN_PITCH +
-            (VidentePreferences.MAX_PITCH - VidentePreferences.MIN_PITCH) * (progress / SEEK_STEPS.toFloat())
-
-    override fun onInit(status: Int) {
-        val engine = tts ?: return
-        if (status != TextToSpeech.SUCCESS) return
-
-        engine.language = Locale.getDefault()
-        ttsReady = true
-
-        applyAudioOutputToTts()
-        availableVoices = VoiceUtils.availableVoicesForLocale(engine, Locale.getDefault())
-        setUpVoiceSpinner()
-    }
-
-    private fun setUpVoiceSpinner() {
-        val labels = mutableListOf(getString(R.string.settings_voice_auto))
-        labels += availableVoices.map { VoiceUtils.displayName(it) }
-
-        spinnerVoice.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-
-        val savedVoiceName = VidentePreferences.getVoiceName(this)
-        val savedIndex = availableVoices.indexOfFirst { it.name == savedVoiceName }
-        spinnerVoice.setSelection(if (savedIndex >= 0) savedIndex + 1 else 0)
-
-        spinnerVoice.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                val voiceName = if (position == 0) null else availableVoices[position - 1].name
-                VidentePreferences.setVoiceName(this@SettingsActivity, voiceName)
-                applyVoiceToTts(voiceName)
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
-        }
-    }
-
-    private fun applyVoiceToTts(voiceName: String?) {
-        val engine = tts ?: return
-        val voice = availableVoices.firstOrNull { it.name == voiceName }
-        engine.voice = voice ?: VoiceUtils.bestVoiceForLocale(engine, Locale.getDefault())
-    }
-
-    private fun previewVoice() {
-        val engine = tts ?: return
-        if (!ttsReady) return
-        engine.setSpeechRate(currentRate)
-        engine.setPitch(currentPitch)
-        applyVoiceToTts(VidentePreferences.getVoiceName(this))
-        engine.speak(getString(R.string.settings_preview_text), TextToSpeech.QUEUE_FLUSH, null, PREVIEW_UTTERANCE_ID)
-    }
-
-    private fun resetToDefaults() {
-        currentRate = VidentePreferences.DEFAULT_RATE
-        currentPitch = VidentePreferences.DEFAULT_PITCH
-        VidentePreferences.setRate(this, currentRate)
-        VidentePreferences.setPitch(this, currentPitch)
-        VidentePreferences.setVoiceName(this, null)
-        VidentePreferences.setAudioOutput(this, VidentePreferences.DEFAULT_AUDIO_OUTPUT)
-        VidentePreferences.setScrollFeedback(this, VidentePreferences.DEFAULT_SCROLL_FEEDBACK)
-        VidentePreferences.setTypingEcho(this, VidentePreferences.DEFAULT_TYPING_ECHO)
-        applyAudioOutputToTts()
-
-        seekRate.progress = rateToProgress(currentRate)
-        seekPitch.progress = pitchToProgress(currentPitch)
-        updateRateLabel(currentRate)
-        updatePitchLabel(currentPitch)
-        spinnerVoice.setSelection(0)
-        spinnerAudioOutput.setSelection(audioOutputValues.indexOf(VidentePreferences.DEFAULT_AUDIO_OUTPUT).coerceAtLeast(0))
-        spinnerScrollFeedback.setSelection(scrollFeedbackValues.indexOf(VidentePreferences.DEFAULT_SCROLL_FEEDBACK).coerceAtLeast(0))
-        spinnerTypingEcho.setSelection(typingEchoValues.indexOf(VidentePreferences.DEFAULT_TYPING_ECHO).coerceAtLeast(0))
-    }
-
-    override fun onDestroy() {
-        tts?.stop()
-        tts?.shutdown()
-        super.onDestroy()
-    }
-
-    companion object {
-        private const val SEEK_STEPS = 100
-        private const val PREVIEW_UTTERANCE_ID = "vidente_preview"
     }
 }

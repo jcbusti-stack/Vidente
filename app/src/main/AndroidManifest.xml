@@ -38,6 +38,11 @@
             android:exported="false"
             android:label="@string/settings_title" />
 
+        <activity
+            android:name=".SettingsSectionActivity"
+            android:exported="false"
+            android:label="@string/settings_title" />
+
         <service
             android:name=".VidenteAccessibilityService"
             android:label="@string/app_name"
