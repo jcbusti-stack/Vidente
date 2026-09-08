@@ -54,6 +54,10 @@ class VidenteAccessibilityService :
     // nueva. Mientras sea false, un scroll es de la propia app (p. ej. WhatsApp
     // baja al último mensaje al abrir un chat) y no se comenta.
     private var interactedSinceScreenChange = false
+    // Momento del último evento de scroll "de en medio" (ni principio ni fin).
+    // Solo se anuncia un borde si hubo uno reciente: así el salto que hace una
+    // app al abrir (Telegram al último mensaje) no dispara "principio/final".
+    private var lastMidScrollAt = 0L
 
     private enum class TutorialStep { NONE, EXPLORE, DOUBLE_TAP, NAVIGATE, SYSTEM, READING, MODES }
     private var tutorialStep = TutorialStep.NONE
@@ -314,6 +318,7 @@ class VidenteAccessibilityService :
         lastSpokenScrollPos = null
         lastScreenChangeAt = SystemClock.uptimeMillis()
         interactedSinceScreenChange = false
+        lastMidScrollAt = 0L
         // Un aviso de borde pendiente pertenece a la pantalla anterior.
         boundaryAnnouncement = null
         lastFocusedNode?.recycle()
@@ -367,14 +372,25 @@ class VidenteAccessibilityService :
 
         if (atEnd || atStart) {
             val which = if (atEnd) "fin" else "inicio"
-            if (which != lastScrollBoundary) {
+            // Un borde real siempre viene después de haber recorrido la lista.
+            // Si no hubo scroll intermedio reciente, este evento es la app
+            // colocándose sola (Telegram baja al último mensaje al abrir el
+            // chat, y llegaba a decir "Principio de la lista"): se registra el
+            // borde pero no se anuncia.
+            val recentMidScroll =
+                SystemClock.uptimeMillis() - lastMidScrollAt <= BOUNDARY_NEEDS_RECENT_MID_MS
+            if (which != lastScrollBoundary && recentMidScroll) {
                 lastScrollBoundary = which
                 stopScrollTone()
                 speak(if (atEnd) "Final de la lista" else "Principio de la lista")
             }
+            // Si se suprime por no haber scroll intermedio reciente no se fija
+            // lastScrollBoundary: una llegada real posterior al mismo borde sí
+            // se anunciará.
             return
         }
         lastScrollBoundary = null
+        lastMidScrollAt = SystemClock.uptimeMillis()
 
         // Se prefiere el desplazamiento en píxeles (continuo y monótono) al
         // índice de elemento, que en algunas apps (Contactos) no cambia por
@@ -1782,6 +1798,7 @@ class VidenteAccessibilityService :
         private const val SCROLL_SETTLE_MS = 400L
         private const val SCROLL_TONE_STOP_MS = 220L
         private const val SCROLL_AFTER_SCREEN_CHANGE_GUARD_MS = 700L
+        private const val BOUNDARY_NEEDS_RECENT_MID_MS = 1500L
         // Eco de escritura: por encima de esto un borrado o una inserción en
         // bloque se anuncia por número de caracteres, no leyendo el texto.
         private const val TYPING_ECHO_MAX_CHARS = 30
