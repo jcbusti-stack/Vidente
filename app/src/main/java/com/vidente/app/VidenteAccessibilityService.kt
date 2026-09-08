@@ -44,6 +44,14 @@ class VidenteAccessibilityService :
     private var pendingText: String? = null
     // Copia del último elemento que Vidente leyó; ancla de respaldo para P5.
     private var lastFocusedNode: AccessibilityNodeInfo? = null
+    private var lastFocusedNodeAt = 0L
+    // Penúltimo elemento leído. El segundo toque del doble toque vuelve a
+    // generar exploración: si cae un pelo desviado, el sistema anuncia la tecla
+    // vecina y esa pasaría a ser "la actual" justo antes de activar. Cuando el
+    // elemento actual se registró hace muy poco (es del propio doble toque) se
+    // activa este, que es el que el usuario escuchó y quiso pulsar.
+    private var prevFocusedNode: AccessibilityNodeInfo? = null
+    private var prevFocusedNodeAt = 0L
     private var treeWalkBudget = 0
 
     // Aviso ("Principio/Final de la pantalla") pendiente de anteponer a la
@@ -331,8 +339,11 @@ class VidenteAccessibilityService :
 
     @Suppress("DEPRECATION")
     private fun rememberFocusedNode(node: AccessibilityNodeInfo) {
-        lastFocusedNode?.recycle()
+        prevFocusedNode?.recycle()
+        prevFocusedNode = lastFocusedNode
+        prevFocusedNodeAt = lastFocusedNodeAt
         lastFocusedNode = try { AccessibilityNodeInfo.obtain(node) } catch (e: Exception) { null }
+        lastFocusedNodeAt = SystemClock.uptimeMillis()
     }
 
     private fun onScreenChanged() {
@@ -348,6 +359,10 @@ class VidenteAccessibilityService :
         boundaryAnnouncement = null
         lastFocusedNode?.recycle()
         lastFocusedNode = null
+        prevFocusedNode?.recycle()
+        prevFocusedNode = null
+        lastFocusedNodeAt = 0L
+        prevFocusedNodeAt = 0L
     }
 
     /**
@@ -1673,13 +1688,24 @@ class VidenteAccessibilityService :
      */
     @Suppress("DEPRECATION")
     private fun activateFocusedElement(): Boolean {
+        val nowMs = SystemClock.uptimeMillis()
+
         // El elemento que Vidente acaba de leer bajo el dedo manda sobre
         // findFocus(): en los teclados, el propio IME mueve el foco de
         // accesibilidad a una tecla vecina entre el toque y el doble toque, y
-        // se escribía otra letra. Solo se usa si sigue siendo válido.
-        val hovered = lastFocusedNode
+        // se escribía otra letra.
+        //
+        // Además, el segundo toque del doble toque vuelve a explorar: si cae un
+        // milímetro desviado, el sistema anuncia la tecla vecina y esa quedaría
+        // como "la actual" justo antes de activar. Por eso, si el elemento
+        // actual se registró hace muy poco, viene de ese propio toque y se usa
+        // el anterior: el que el usuario escuchó y quiso pulsar.
+        val fromOwnDoubleTap = nowMs - lastFocusedNodeAt < DOUBLE_TAP_OWN_HOVER_MS &&
+            prevFocusedNode != null &&
+            lastFocusedNodeAt - prevFocusedNodeAt > DOUBLE_TAP_OWN_HOVER_MS
+        val hovered = if (fromOwnDoubleTap) prevFocusedNode else lastFocusedNode
         val fresh = hovered != null &&
-            SystemClock.uptimeMillis() - lastHoverAt < HOVER_OWNS_FOCUS_MS &&
+            nowMs - lastHoverAt < HOVER_OWNS_FOCUS_MS &&
             (try { hovered.refresh() } catch (e: Exception) { false })
         if (fresh && hovered != null) {
             val copy = try { AccessibilityNodeInfo.obtain(hovered) } catch (e: Exception) { null }
@@ -1863,6 +1889,8 @@ class VidenteAccessibilityService :
         releaseSoundPool()
         lastFocusedNode?.recycle()
         lastFocusedNode = null
+        prevFocusedNode?.recycle()
+        prevFocusedNode = null
         hideFloatingButton()
         tts?.stop()
         tts?.shutdown()
@@ -1908,10 +1936,14 @@ class VidenteAccessibilityService :
         // Vibración de exploración: muy corta y suave, para que no moleste al
         // recorrer la pantalla ni se solape con la voz.
         private const val HOVER_VIBRATION_MS = 28L
-        private const val HOVER_VIBRATION_AMPLITUDE = 160  // 1..255
+        private const val HOVER_VIBRATION_AMPLITUDE = 225  // 1..255
         // Un mismo texto se puede repetir pasado este tiempo: al escribir
         // rápido, tocar dos veces la misma tecla debe anunciarse dos veces.
         private const val REPEAT_SPEECH_AFTER_MS = 350L
+        // Un elemento registrado hace menos de esto, cuando el anterior llevaba
+        // más tiempo, viene del segundo toque del doble toque, no de una
+        // exploración nueva del usuario (que se para a escuchar el anuncio).
+        private const val DOUBLE_TAP_OWN_HOVER_MS = 320L
 
         // Apps de mensajería: el campo de escribir se anuncia como "mensaje,
         // cuadro de edición" en vez de solo "cuadro de edición".
