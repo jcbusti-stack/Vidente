@@ -7,8 +7,6 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.media.AudioAttributes
-import android.media.AudioDeviceInfo
-import android.media.AudioManager
 import android.media.SoundPool
 import android.os.Build
 import android.os.Bundle
@@ -52,6 +50,10 @@ class VidenteAccessibilityService :
     // scroll que dispara un contenedor recién abierto (p. ej. una carpeta del
     // launcher), que llega "al final" sin que el usuario haya desplazado nada.
     private var lastScreenChangeAt = 0L
+    // Se pone a true en cuanto el usuario toca o gesticula sobre la pantalla
+    // nueva. Mientras sea false, un scroll es de la propia app (p. ej. WhatsApp
+    // baja al último mensaje al abrir un chat) y no se comenta.
+    private var interactedSinceScreenChange = false
 
     private enum class TutorialStep { NONE, EXPLORE, DOUBLE_TAP, NAVIGATE, SYSTEM, READING, MODES }
     private var tutorialStep = TutorialStep.NONE
@@ -121,8 +123,6 @@ class VidenteAccessibilityService :
     // P8c parte 2: eco de escritura. Qué se dice al teclear en un campo de
     // texto (nada / caracteres / palabras / ambos). Configurable en Ajustes.
     private var typingEcho = VidentePreferences.DEFAULT_TYPING_ECHO
-
-    private val audioManager by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
 
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
@@ -313,6 +313,7 @@ class VidenteAccessibilityService :
         lastScrollBoundary = null
         lastSpokenScrollPos = null
         lastScreenChangeAt = SystemClock.uptimeMillis()
+        interactedSinceScreenChange = false
         // Un aviso de borde pendiente pertenece a la pantalla anterior.
         boundaryAnnouncement = null
         lastFocusedNode?.recycle()
@@ -330,9 +331,13 @@ class VidenteAccessibilityService :
         if (continuousReading && !continuousPaused) return
 
         // Al abrir una pantalla o un contenedor (una carpeta del launcher, un
-        // desplegable) el sistema emite un scroll que suele venir "al final"
-        // aunque el usuario no haya movido nada: eso hacía que Vidente dijera
-        // "Final de la lista" en vez de anunciar lo que se abrió.
+        // chat de WhatsApp que baja solo al último mensaje) el sistema emite un
+        // scroll que suele venir "al final" aunque el usuario no haya movido
+        // nada: eso hacía que Vidente dijera "Final de la lista" en vez de
+        // anunciar lo que se abrió. Se ignora el scroll hasta que el usuario
+        // toca o gesticula sobre la pantalla nueva, y también durante un breve
+        // margen tras el cambio.
+        if (!interactedSinceScreenChange) return
         if (SystemClock.uptimeMillis() - lastScreenChangeAt < SCROLL_AFTER_SCREEN_CHANGE_GUARD_MS) return
 
         val fromIndex = event.fromIndex
@@ -629,6 +634,12 @@ class VidenteAccessibilityService :
         }
 
         val node = event.source ?: return
+
+        // Explorar al tacto cuenta como interacción con la pantalla nueva: a
+        // partir de aquí un scroll ya puede ser del usuario.
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER) {
+            interactedSinceScreenChange = true
+        }
 
         // Vidente gestiona el foco de accesibilidad: al leer un elemento por
         // toque o al recibir el foco de entrada, se lo asigna. Sin esto,
@@ -1007,6 +1018,9 @@ class VidenteAccessibilityService :
     override fun onGesture(gestureId: Int): Boolean {
         if (tutorialStep != TutorialStep.NONE) return handleTutorialGesture(gestureId)
 
+        // Un gesto cuenta como interacción con la pantalla actual.
+        interactedSinceScreenChange = true
+
         // Con lectura continua en marcha, el primer gesto solo la pausa.
         if (continuousReading && !continuousPaused) {
             if (SystemClock.uptimeMillis() - continuousStartedAt >= CONTINUOUS_START_GUARD_MS) {
@@ -1209,79 +1223,75 @@ class VidenteAccessibilityService :
     /**
      * P8c parte 2: eco de escritura. Al teclear en un campo de texto se lee el
      * carácter escrito y/o la palabra al terminarla, según la preferencia. Los
-     * borrados se avisan. Nunca se leen los caracteres de un campo de
-     * contraseña. Solo actúa con el teclado en pantalla, para no leer los
-     * cambios de texto que hace la propia app.
+     * borrados se avisan ("borrado, a"). Los campos de contraseña se leen igual
+     * que cualquier otro campo. Solo actúa con el teclado en pantalla, para no
+     * leer los cambios de texto que hace la propia app.
+     *
+     * El cambio se calcula comparando el texto anterior con el nuevo (prefijo y
+     * sufijo comunes), no con fromIndex/addedCount/removedCount, porque varios
+     * teclados (SwiftKey con texto predictivo) rehacen la palabra entera y esos
+     * campos no describían bien un borrado suelto.
      */
     private fun handleTextChanged(event: AccessibilityEvent) {
         if (typingEcho == VidentePreferences.TYPING_ECHO_NONE) return
         if (!keyboardVisible) return
-        // En un campo de contraseña solo se lee lo tecleado si la voz de
-        // Vidente está saliendo por un dispositivo privado (audífonos o
-        // auriculares Bluetooth, audífonos médicos, cascos por cable). Si
-        // sonara por el altavoz del teléfono, un tercero oiría la contraseña.
-        if (event.isPassword && !audioGoesToPrivateOutput()) return
 
         val now = event.text?.joinToString("") ?: return
         val before = event.beforeText?.toString() ?: ""
-        val from = event.fromIndex
-        val added = event.addedCount
-        val removed = event.removedCount
-        if (from < 0) return
+        if (now == before) return
+
+        // Prefijo común.
+        var p = 0
+        val minLen = minOf(before.length, now.length)
+        while (p < minLen && before[p] == now[p]) p++
+        // Sufijo común (sin solaparse con el prefijo).
+        var s = 0
+        while (s < minLen - p &&
+            before[before.length - 1 - s] == now[now.length - 1 - s]
+        ) s++
+
+        val removedText = before.substring(p, before.length - s)
+        val addedText = now.substring(p, now.length - s)
+
+        // "Apareció" todo el contenido de golpe (texto puesto por la app, o
+        // beforeText que no llegó): no es tecleo, no se lee.
+        if (before.isEmpty() && addedText.length == now.length && now.length > 2) return
 
         val echoChars = typingEcho == VidentePreferences.TYPING_ECHO_CHARS ||
             typingEcho == VidentePreferences.TYPING_ECHO_CHARS_WORDS
         val echoWords = typingEcho == VidentePreferences.TYPING_ECHO_WORDS ||
             typingEcho == VidentePreferences.TYPING_ECHO_CHARS_WORDS
 
-        // Borrado.
-        if (removed > 0 && added == 0) {
-            if (from + removed > before.length) return
-            val gone = before.substring(from, from + removed)
-            val what = if (gone.length > TYPING_ECHO_MAX_CHARS) {
-                "${gone.length} caracteres"
-            } else {
-                gone.trim().ifBlank { "espacio" }
+        // Borrado puro.
+        if (addedText.isEmpty() && removedText.isNotEmpty()) {
+            val what = when {
+                removedText.length > TYPING_ECHO_MAX_CHARS -> "${removedText.length} caracteres"
+                removedText.isBlank() -> "espacio"
+                else -> removedText.trim().ifBlank { "espacio" }
             }
             speak("borrado, $what")
             return
         }
+        if (addedText.isEmpty()) return
 
-        if (added <= 0 || from + added > now.length) return
-        val ins = now.substring(from, from + added)
-
-        // Carácter (o trozo pegado / sugerencia) recién insertado.
+        // Carácter suelto, o trozo insertado (pegado / sugerencia del teclado).
         if (echoChars) {
             when {
-                added == 1 && ins.isNotBlank() -> speak(ins)
-                added > 1 -> speak(ins.take(TYPING_ECHO_MAX_CHARS).trim().ifBlank { "espacio" })
+                addedText.length == 1 && !addedText[0].isWhitespace() -> speak(addedText)
+                addedText.length > 1 ->
+                    speak(addedText.take(TYPING_ECHO_MAX_CHARS).trim().ifBlank { "espacio" })
             }
         }
 
         // Palabra terminada: se acaba de teclear un espacio y justo antes hay
-        // una palabra. Las sugerencias del teclado (added > 1) ya se leen
-        // enteras arriba.
-        if (echoWords && added == 1 && ins[0].isWhitespace()) {
-            val end = from
+        // una palabra. Una sugerencia entera (addedText largo) ya se leyó arriba.
+        if (echoWords && addedText.length == 1 && addedText[0].isWhitespace()) {
+            val end = p
             var start = end
             while (start > 0 && !now[start - 1].isWhitespace()) start--
             val word = now.substring(start, end)
             if (word.isNotBlank()) speak(word)
         }
-    }
-
-    /**
-     * ¿Hay un dispositivo de salida privado conectado (audífonos o auriculares
-     * Bluetooth, audífonos médicos, cascos por cable o USB)? Como el TTS de
-     * Vidente usa USAGE_MEDIA, si existe uno de estos la voz sale por ahí y no
-     * por el altavoz. Se usa para permitir el eco de contraseñas solo cuando
-     * nadie más puede oírlas.
-     */
-    private fun audioGoesToPrivateOutput(): Boolean = try {
-        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-            .any { it.type in PRIVATE_OUTPUT_TYPES }
-    } catch (e: Exception) {
-        false
     }
 
     /**
@@ -1775,23 +1785,6 @@ class VidenteAccessibilityService :
         // Eco de escritura: por encima de esto un borrado o una inserción en
         // bloque se anuncia por número de caracteres, no leyendo el texto.
         private const val TYPING_ECHO_MAX_CHARS = 30
-
-        // Salidas de audio "privadas": la voz llega solo a quien lleva puesto
-        // el dispositivo. Habilitan el eco de contraseña.
-        private val PRIVATE_OUTPUT_TYPES: Set<Int> = buildSet {
-            add(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)
-            add(AudioDeviceInfo.TYPE_BLUETOOTH_SCO)
-            add(AudioDeviceInfo.TYPE_WIRED_HEADSET)
-            add(AudioDeviceInfo.TYPE_WIRED_HEADPHONES)
-            add(AudioDeviceInfo.TYPE_USB_HEADSET)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                add(AudioDeviceInfo.TYPE_HEARING_AID)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                add(AudioDeviceInfo.TYPE_BLE_HEADSET)
-                add(AudioDeviceInfo.TYPE_BLE_BROADCAST)
-            }
-        }
         private const val SCROLL_TONE_VOL = 0.55f
         private const val BLIP_INTERVAL_MS = 110L
         private const val DIALOG_MAX_CHARS = 400
