@@ -29,6 +29,7 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var spinnerVoice: Spinner
     private lateinit var spinnerAudioOutput: Spinner
     private lateinit var spinnerScrollFeedback: Spinner
+    private lateinit var spinnerTypingEcho: Spinner
 
     private val audioOutputValues = listOf(
         VidentePreferences.AUDIO_OUTPUT_MEDIA,
@@ -37,6 +38,12 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private val scrollFeedbackValues = listOf(
         VidentePreferences.SCROLL_FEEDBACK_TONE,
         VidentePreferences.SCROLL_FEEDBACK_VOICE
+    )
+    private val typingEchoValues = listOf(
+        VidentePreferences.TYPING_ECHO_CHARS_WORDS,
+        VidentePreferences.TYPING_ECHO_CHARS,
+        VidentePreferences.TYPING_ECHO_WORDS,
+        VidentePreferences.TYPING_ECHO_NONE
     )
 
     private var currentRate = VidentePreferences.DEFAULT_RATE
@@ -53,6 +60,7 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         spinnerVoice = findViewById(R.id.spinnerVoice)
         spinnerAudioOutput = findViewById(R.id.spinnerAudioOutput)
         spinnerScrollFeedback = findViewById(R.id.spinnerScrollFeedback)
+        spinnerTypingEcho = findViewById(R.id.spinnerTypingEcho)
 
         currentRate = VidentePreferences.getRate(this)
         currentPitch = VidentePreferences.getPitch(this)
@@ -61,6 +69,7 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         setUpPitchSeekBar()
         setUpAudioOutputSpinner()
         setUpScrollFeedbackSpinner()
+        setUpTypingEchoSpinner()
 
         findViewById<Button>(R.id.buttonPreview).setOnClickListener { previewVoice() }
         findViewById<Button>(R.id.buttonReset).setOnClickListener { resetToDefaults() }
@@ -151,6 +160,28 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         spinnerScrollFeedback.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
                 VidentePreferences.setScrollFeedback(this@SettingsActivity, scrollFeedbackValues[position])
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+    }
+
+    private fun setUpTypingEchoSpinner() {
+        val labels = listOf(
+            getString(R.string.settings_typing_echo_chars_words),
+            getString(R.string.settings_typing_echo_chars),
+            getString(R.string.settings_typing_echo_words),
+            getString(R.string.settings_typing_echo_none)
+        )
+        spinnerTypingEcho.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+
+        val saved = VidentePreferences.getTypingEcho(this)
+        spinnerTypingEcho.setSelection(typingEchoValues.indexOf(saved).coerceAtLeast(0))
+
+        spinnerTypingEcho.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                VidentePreferences.setTypingEcho(this@SettingsActivity, typingEchoValues[position])
             }
 
             override fun onNothingSelected(parent: AdapterView<*>) {}
@@ -254,6 +285,7 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         VidentePreferences.setVoiceName(this, null)
         VidentePreferences.setAudioOutput(this, VidentePreferences.DEFAULT_AUDIO_OUTPUT)
         VidentePreferences.setScrollFeedback(this, VidentePreferences.DEFAULT_SCROLL_FEEDBACK)
+        VidentePreferences.setTypingEcho(this, VidentePreferences.DEFAULT_TYPING_ECHO)
         applyAudioOutputToTts()
 
         seekRate.progress = rateToProgress(currentRate)
@@ -263,6 +295,7 @@ class SettingsActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         spinnerVoice.setSelection(0)
         spinnerAudioOutput.setSelection(audioOutputValues.indexOf(VidentePreferences.DEFAULT_AUDIO_OUTPUT).coerceAtLeast(0))
         spinnerScrollFeedback.setSelection(scrollFeedbackValues.indexOf(VidentePreferences.DEFAULT_SCROLL_FEEDBACK).coerceAtLeast(0))
+        spinnerTypingEcho.setSelection(typingEchoValues.indexOf(VidentePreferences.DEFAULT_TYPING_ECHO).coerceAtLeast(0))
     }
 
     override fun onDestroy() {

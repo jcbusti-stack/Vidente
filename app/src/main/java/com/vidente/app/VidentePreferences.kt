@@ -30,6 +30,15 @@ object VidentePreferences {
     const val SCROLL_FEEDBACK_VOICE = "voice"
     const val DEFAULT_SCROLL_FEEDBACK = SCROLL_FEEDBACK_TONE
 
+    // Eco de escritura al teclear (P8c parte 2): qué se dice al escribir en un
+    // campo de texto. Nunca se leen los caracteres de un campo de contraseña.
+    const val KEY_TYPING_ECHO = "typing_echo"
+    const val TYPING_ECHO_NONE = "none"
+    const val TYPING_ECHO_CHARS = "chars"
+    const val TYPING_ECHO_WORDS = "words"
+    const val TYPING_ECHO_CHARS_WORDS = "chars_words"
+    const val DEFAULT_TYPING_ECHO = TYPING_ECHO_CHARS_WORDS
+
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
     const val MIN_RATE = 0.5f
@@ -106,6 +115,13 @@ object VidentePreferences {
 
     fun setScrollFeedback(context: Context, value: String) {
         prefs(context).edit().putString(KEY_SCROLL_FEEDBACK, value).apply()
+    }
+
+    fun getTypingEcho(context: Context): String =
+        prefs(context).getString(KEY_TYPING_ECHO, DEFAULT_TYPING_ECHO) ?: DEFAULT_TYPING_ECHO
+
+    fun setTypingEcho(context: Context, value: String) {
+        prefs(context).edit().putString(KEY_TYPING_ECHO, value).apply()
     }
 
     /**

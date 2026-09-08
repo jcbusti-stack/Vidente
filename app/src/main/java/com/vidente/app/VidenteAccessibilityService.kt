@@ -116,6 +116,10 @@ class VidenteAccessibilityService :
     private var keyboardVisible = false
     private val imePackages = mutableSetOf<String>()
 
+    // P8c parte 2: eco de escritura. Qué se dice al teclear en un campo de
+    // texto (nada / caracteres / palabras / ambos). Configurable en Ajustes.
+    private var typingEcho = VidentePreferences.DEFAULT_TYPING_ECHO
+
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
     private val backendAssistant: ConversationalAssistant by lazy { BackendConversationalAssistant(this) }
@@ -280,8 +284,11 @@ class VidenteAccessibilityService :
             AccessibilityEvent.TYPE_VIEW_SCROLLED ->
                 if (tutorialStep == TutorialStep.NONE) handleScrolled(event)
 
+            // P8c parte 2: eco de escritura al teclear en un campo de texto.
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED ->
+                if (tutorialStep == TutorialStep.NONE) handleTextChanged(event)
+
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_SELECTED,
             AccessibilityEvent.TYPE_ANNOUNCEMENT -> Unit
 
@@ -451,6 +458,7 @@ class VidenteAccessibilityService :
     private fun refreshScrollFeedback() {
         scrollFeedbackTone =
             VidentePreferences.getScrollFeedback(this) == VidentePreferences.SCROLL_FEEDBACK_TONE
+        typingEcho = VidentePreferences.getTypingEcho(this)
     }
 
     /**
@@ -1195,6 +1203,66 @@ class VidenteAccessibilityService :
     }
 
     /**
+     * P8c parte 2: eco de escritura. Al teclear en un campo de texto se lee el
+     * carácter escrito y/o la palabra al terminarla, según la preferencia. Los
+     * borrados se avisan. Nunca se leen los caracteres de un campo de
+     * contraseña. Solo actúa con el teclado en pantalla, para no leer los
+     * cambios de texto que hace la propia app.
+     */
+    private fun handleTextChanged(event: AccessibilityEvent) {
+        if (typingEcho == VidentePreferences.TYPING_ECHO_NONE) return
+        if (!keyboardVisible) return
+        if (event.isPassword) return
+
+        val now = event.text?.joinToString("") ?: return
+        val before = event.beforeText?.toString() ?: ""
+        val from = event.fromIndex
+        val added = event.addedCount
+        val removed = event.removedCount
+        if (from < 0) return
+
+        val echoChars = typingEcho == VidentePreferences.TYPING_ECHO_CHARS ||
+            typingEcho == VidentePreferences.TYPING_ECHO_CHARS_WORDS
+        val echoWords = typingEcho == VidentePreferences.TYPING_ECHO_WORDS ||
+            typingEcho == VidentePreferences.TYPING_ECHO_CHARS_WORDS
+
+        // Borrado.
+        if (removed > 0 && added == 0) {
+            if (from + removed > before.length) return
+            val gone = before.substring(from, from + removed)
+            val what = if (gone.length > TYPING_ECHO_MAX_CHARS) {
+                "${gone.length} caracteres"
+            } else {
+                gone.trim().ifBlank { "espacio" }
+            }
+            speak("borrado, $what")
+            return
+        }
+
+        if (added <= 0 || from + added > now.length) return
+        val ins = now.substring(from, from + added)
+
+        // Carácter (o trozo pegado / sugerencia) recién insertado.
+        if (echoChars) {
+            when {
+                added == 1 && ins.isNotBlank() -> speak(ins)
+                added > 1 -> speak(ins.take(TYPING_ECHO_MAX_CHARS).trim().ifBlank { "espacio" })
+            }
+        }
+
+        // Palabra terminada: se acaba de teclear un espacio y justo antes hay
+        // una palabra. Las sugerencias del teclado (added > 1) ya se leen
+        // enteras arriba.
+        if (echoWords && added == 1 && ins[0].isWhitespace()) {
+            val end = from
+            var start = end
+            while (start > 0 && !now[start - 1].isWhitespace()) start--
+            val word = now.substring(start, end)
+            if (word.isNotBlank()) speak(word)
+        }
+    }
+
+    /**
      * Salta al siguiente o anterior nodo visible de un tipo dado (encabezado,
      * enlace, control o campo) en orden de lectura, partiendo del elemento
      * enfocado. El nodo destino se anuncia por su evento de foco.
@@ -1682,6 +1750,9 @@ class VidenteAccessibilityService :
         private const val SCROLL_SETTLE_MS = 400L
         private const val SCROLL_TONE_STOP_MS = 220L
         private const val SCROLL_AFTER_SCREEN_CHANGE_GUARD_MS = 700L
+        // Eco de escritura: por encima de esto un borrado o una inserción en
+        // bloque se anuncia por número de caracteres, no leyendo el texto.
+        private const val TYPING_ECHO_MAX_CHARS = 30
         private const val SCROLL_TONE_VOL = 0.55f
         private const val BLIP_INTERVAL_MS = 110L
         private const val DIALOG_MAX_CHARS = 400

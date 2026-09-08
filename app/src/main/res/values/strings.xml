@@ -23,6 +23,11 @@
     <string name="settings_scroll_feedback_label">Aviso de posición al desplazar</string>
     <string name="settings_scroll_feedback_tone">Sonido (tono grave a agudo)</string>
     <string name="settings_scroll_feedback_voice">Voz (porcentaje)</string>
+    <string name="settings_typing_echo_label">Eco de escritura al teclear</string>
+    <string name="settings_typing_echo_chars_words">Caracteres y palabras</string>
+    <string name="settings_typing_echo_chars">Solo caracteres</string>
+    <string name="settings_typing_echo_words">Solo palabras</string>
+    <string name="settings_typing_echo_none">Desactivado</string>
 
     <string name="settings_backend_url_label">Dirección del servidor de Vidente (para el modo conversacional)</string>
     <string name="settings_backend_url_hint">Ej: https://mi-vidente.onrender.com</string>
