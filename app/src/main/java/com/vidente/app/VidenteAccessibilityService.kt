@@ -54,6 +54,11 @@ class VidenteAccessibilityService :
     // nueva. Mientras sea false, un scroll es de la propia app (p. ej. WhatsApp
     // baja al último mensaje al abrir un chat) y no se comenta.
     private var interactedSinceScreenChange = false
+    // Momento del último TYPE_VIEW_HOVER_ENTER (exploración con el dedo).
+    // Mientras el dedo manda, se ignora el foco de entrada (TYPE_VIEW_FOCUSED)
+    // que disparan algunas apps y teclados en un elemento vecino, que hacía
+    // saltar la lectura a otra tecla o a otro icono.
+    private var lastHoverAt = 0L
     // Momento del último evento de scroll "de en medio" (ni principio ni fin).
     // Solo se anuncia un borde si hubo uno reciente: así el salto que hace una
     // app al abrir (Telegram al último mensaje) no dispara "principio/final".
@@ -649,11 +654,25 @@ class VidenteAccessibilityService :
             return
         }
 
+        val now = SystemClock.uptimeMillis()
+
+        // Mientras el usuario explora con el dedo, el toque manda. Un
+        // TYPE_VIEW_FOCUSED (foco de entrada) que llega justo después de un
+        // hover suele venir de la app o el teclado enfocando un elemento
+        // vecino, y hacía que la lectura y la activación saltaran a otra tecla
+        // o a otro icono. Se ignora por completo durante ese margen.
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED &&
+            now - lastHoverAt < HOVER_OWNS_FOCUS_MS
+        ) {
+            return
+        }
+
         val node = event.source ?: return
 
         // Explorar al tacto cuenta como interacción con la pantalla nueva: a
         // partir de aquí un scroll ya puede ser del usuario.
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER) {
+            lastHoverAt = now
             interactedSinceScreenChange = true
         }
 
@@ -720,8 +739,12 @@ class VidenteAccessibilityService :
         val parts = mutableListOf<String>()
 
         if (label != null) {
-            parts.add(label)
-            roleOf(control)?.let { parts.add(it) }
+            val role = roleOf(control)
+            // No se repite la etiqueta si el rol ya la contiene (el campo de
+            // mensaje de WhatsApp/Telegram tiene la pista "Mensaje" y el rol
+            // "mensaje, cuadro de edición").
+            if (role == null || !role.contains(label, ignoreCase = true)) parts.add(label)
+            role?.let { parts.add(it) }
         } else {
             // Control real sin etiqueta (p. ej. el botón que abre el menú
             // lateral de Grok, un ImageButton sin contentDescription):
@@ -833,7 +856,14 @@ class VidenteAccessibilityService :
     private fun roleOf(node: AccessibilityNodeInfo): String? {
         val className = node.className?.toString().orEmpty()
         return when {
-            node.isEditable || className.endsWith("EditText") -> "campo de texto"
+            node.isEditable || className.endsWith("EditText") -> {
+                val pkg = node.packageName?.toString()
+                if (pkg != null && pkg in MESSAGING_PACKAGES) {
+                    "mensaje, cuadro de edición"
+                } else {
+                    "cuadro de edición"
+                }
+            }
             className.endsWith("Switch") ||
                 className.endsWith("SwitchCompat") ||
                 className.endsWith("SwitchMaterial") ||
@@ -1799,6 +1829,31 @@ class VidenteAccessibilityService :
         private const val SCROLL_TONE_STOP_MS = 220L
         private const val SCROLL_AFTER_SCREEN_CHANGE_GUARD_MS = 700L
         private const val BOUNDARY_NEEDS_RECENT_MID_MS = 1500L
+        private const val HOVER_OWNS_FOCUS_MS = 1200L
+
+        // Apps de mensajería: el campo de escribir se anuncia como "mensaje,
+        // cuadro de edición" en vez de solo "cuadro de edición".
+        private val MESSAGING_PACKAGES: Set<String> = setOf(
+            "com.whatsapp",
+            "com.whatsapp.w4b",
+            "org.telegram.messenger",
+            "org.telegram.messenger.web",
+            "org.telegram.plus",
+            "org.thunderdog.challegram",
+            "com.facebook.orca",
+            "com.facebook.mlite",
+            "com.instagram.android",
+            "org.thoughtcrime.securesms",
+            "com.google.android.apps.messaging",
+            "com.android.mms",
+            "com.miui.mms",
+            "com.discord",
+            "jp.naver.line.android",
+            "com.viber.voip",
+            "com.tencent.mm",
+            "com.skype.raider",
+            "org.telegram.messenger.beta"
+        )
         // Eco de escritura: por encima de esto un borrado o una inserción en
         // bloque se anuncia por número de caracteres, no leyendo el texto.
         private const val TYPING_ECHO_MAX_CHARS = 30
