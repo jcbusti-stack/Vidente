@@ -14,6 +14,58 @@
     <string name="settings_section_conversational">Asistente conversacional</string>
     <string name="settings_section_general">Ajustes generales</string>
     <string name="settings_back">Volver a Ajustes</string>
+
+    <!-- ===== Texto que Vidente dice en voz alta ===== -->
+    <string name="spoken_role_button">botón</string>
+    <string name="spoken_role_switch">interruptor</string>
+    <string name="spoken_role_checkbox">casilla</string>
+    <string name="spoken_role_radio">opción</string>
+    <string name="spoken_role_slider">control deslizante</string>
+    <string name="spoken_role_editbox">cuadro de edición</string>
+    <string name="spoken_role_message_editbox">mensaje, cuadro de edición</string>
+    <string name="spoken_role_text">texto</string>
+
+    <string name="spoken_state_on">activado</string>
+    <string name="spoken_state_off">desactivado</string>
+    <string name="spoken_state_selected">seleccionado</string>
+    <string name="spoken_state_disabled">no disponible</string>
+
+    <string name="spoken_screen_start">Principio de la pantalla</string>
+    <string name="spoken_screen_end">Final de la pantalla</string>
+    <string name="spoken_list_start">Principio de la lista</string>
+    <string name="spoken_list_end">Final de la lista</string>
+    <string name="spoken_text_start">Principio del texto</string>
+    <string name="spoken_text_end">Final del texto</string>
+    <string name="spoken_no_text_to_traverse">Aquí no hay texto para recorrer</string>
+
+    <string name="spoken_reading_paused">Pausa</string>
+    <string name="spoken_reading_finished">Fin de la lectura</string>
+
+    <string name="spoken_keyboard_shown">Teclado en pantalla</string>
+    <string name="spoken_keyboard_hidden">Teclado oculto</string>
+
+    <string name="spoken_deleted">borrado, %1$s</string>
+    <string name="spoken_space">espacio</string>
+    <string name="spoken_chars_count">%1$d caracteres</string>
+
+    <string name="spoken_scroll_item">elemento %1$d de %2$d</string>
+    <string name="spoken_scroll_percent">%1$d por ciento</string>
+
+    <string name="spoken_no_type_on_screen">No hay %1$s en la pantalla</string>
+
+    <string name="spoken_home">Inicio</string>
+    <string name="spoken_back">Atrás</string>
+    <string name="spoken_recents">Recientes</string>
+
+    <string name="nav_mode_element">elemento</string>
+    <string name="nav_mode_character">carácter</string>
+    <string name="nav_mode_word">palabra</string>
+    <string name="nav_mode_line">línea</string>
+    <string name="nav_mode_paragraph">párrafo</string>
+    <string name="nav_mode_heading">encabezados</string>
+    <string name="nav_mode_link">enlaces</string>
+    <string name="nav_mode_control">controles</string>
+    <string name="nav_mode_field">campos</string>
     <string name="settings_rate_label">Velocidad de voz</string>
     <string name="settings_rate_value">Velocidad: %1$.2fx</string>
     <string name="settings_pitch_label">Tono de voz</string>

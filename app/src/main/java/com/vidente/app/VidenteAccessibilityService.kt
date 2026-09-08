@@ -115,16 +115,16 @@ class VidenteAccessibilityService :
     private var continuousStartedAt = 0L
 
     // ---- Navegación granular y por tipo (P7) ----
-    private enum class NavMode(val label: String) {
-        ELEMENT("elemento"),
-        CHARACTER("carácter"),
-        WORD("palabra"),
-        LINE("línea"),
-        PARAGRAPH("párrafo"),
-        HEADING("encabezados"),
-        LINK("enlaces"),
-        CONTROL("controles"),
-        FIELD("campos")
+    private enum class NavMode(val labelRes: Int) {
+        ELEMENT(R.string.nav_mode_element),
+        CHARACTER(R.string.nav_mode_character),
+        WORD(R.string.nav_mode_word),
+        LINE(R.string.nav_mode_line),
+        PARAGRAPH(R.string.nav_mode_paragraph),
+        HEADING(R.string.nav_mode_heading),
+        LINK(R.string.nav_mode_link),
+        CONTROL(R.string.nav_mode_control),
+        FIELD(R.string.nav_mode_field)
     }
     private var navMode = NavMode.ELEMENT
 
@@ -422,7 +422,7 @@ class VidenteAccessibilityService :
             if (which != lastScrollBoundary && recentMidScroll) {
                 lastScrollBoundary = which
                 stopScrollTone()
-                speak(if (atEnd) "Final de la lista" else "Principio de la lista")
+                speak(getString(if (atEnd) R.string.spoken_list_end else R.string.spoken_list_start))
             }
             // Si se suprime por no haber scroll intermedio reciente no se fija
             // lastScrollBoundary: una llegada real posterior al mismo borde sí
@@ -450,9 +450,9 @@ class VidenteAccessibilityService :
             mainHandler.postDelayed(stop, SCROLL_TONE_STOP_MS)
         } else {
             val pos = if (itemCount > 0 && fromIndex >= 0) {
-                "elemento ${fromIndex + 1} de $itemCount"
+                getString(R.string.spoken_scroll_item, fromIndex + 1, itemCount)
             } else {
-                "${(fraction * 100).toInt()} por ciento"
+                getString(R.string.spoken_scroll_percent, (fraction * 100).toInt())
             }
             pendingScrollRunnable?.let { mainHandler.removeCallbacks(it) }
             val speakPos = Runnable {
@@ -635,7 +635,7 @@ class VidenteAccessibilityService :
         val r = Runnable {
             if (!keyboardVisible) {
                 keyboardVisible = true
-                tts?.speak("Teclado en pantalla", TextToSpeech.QUEUE_ADD, null, UTTERANCE_ID)
+                tts?.speak(getString(R.string.spoken_keyboard_shown), TextToSpeech.QUEUE_ADD, null, UTTERANCE_ID)
             }
         }
         pendingKeyboardRunnable = r
@@ -650,7 +650,7 @@ class VidenteAccessibilityService :
         if (visible == keyboardVisible) return
         keyboardVisible = visible
         tts?.speak(
-            if (visible) "Teclado en pantalla" else "Teclado oculto",
+            getString(if (visible) R.string.spoken_keyboard_shown else R.string.spoken_keyboard_hidden),
             TextToSpeech.QUEUE_ADD, null, UTTERANCE_ID
         )
     }
@@ -924,22 +924,22 @@ class VidenteAccessibilityService :
             node.isEditable || className.endsWith("EditText") -> {
                 val pkg = node.packageName?.toString()
                 if (pkg != null && pkg in MESSAGING_PACKAGES) {
-                    "mensaje, cuadro de edición"
+                    getString(R.string.spoken_role_message_editbox)
                 } else {
-                    "cuadro de edición"
+                    getString(R.string.spoken_role_editbox)
                 }
             }
             className.endsWith("Switch") ||
                 className.endsWith("SwitchCompat") ||
                 className.endsWith("SwitchMaterial") ||
-                className.endsWith("ToggleButton") -> "interruptor"
-            className.endsWith("CheckBox") -> "casilla"
-            className.endsWith("RadioButton") -> "opción"
-            node.isCheckable -> "casilla"
-            className.endsWith("SeekBar") -> "control deslizante"
+                className.endsWith("ToggleButton") -> getString(R.string.spoken_role_switch)
+            className.endsWith("CheckBox") -> getString(R.string.spoken_role_checkbox)
+            className.endsWith("RadioButton") -> getString(R.string.spoken_role_radio)
+            node.isCheckable -> getString(R.string.spoken_role_checkbox)
+            className.endsWith("SeekBar") -> getString(R.string.spoken_role_slider)
             // Solo se dice "botón" en botones de verdad. Los íconos del inicio y
             // las filas clickeables normales se leen solo con su nombre.
-            className.endsWith("Button") -> "botón"
+            className.endsWith("Button") -> getString(R.string.spoken_role_button)
             else -> null
         }
     }
@@ -956,11 +956,13 @@ class VidenteAccessibilityService :
 
         when {
             stateDescription != null -> states.add(stateDescription)
-            node.isCheckable -> states.add(if (node.isChecked) "activado" else "desactivado")
+            node.isCheckable -> states.add(
+                getString(if (node.isChecked) R.string.spoken_state_on else R.string.spoken_state_off)
+            )
         }
 
-        if (node.isSelected) states.add("seleccionado")
-        if (!node.isEnabled) states.add("no disponible")
+        if (node.isSelected) states.add(getString(R.string.spoken_state_selected))
+        if (!node.isEnabled) states.add(getString(R.string.spoken_state_disabled))
 
         return states
     }
@@ -1099,7 +1101,7 @@ class VidenteAccessibilityService :
 
     private fun describeNode(node: AccessibilityNodeInfo): String? {
         val label = ownLabel(node) ?: return null
-        val role = (roleOf(node) ?: "texto").replaceFirstChar { it.uppercase() }
+        val role = (roleOf(node) ?: getString(R.string.spoken_role_text)).replaceFirstChar { it.uppercase() }
         return "[$role] $label"
     }
 
@@ -1174,15 +1176,15 @@ class VidenteAccessibilityService :
             GESTURE_SWIPE_LEFT -> return moveInMode(forward = false)
         }
 
-        val (action, spoken) = when (gestureId) {
-            GESTURE_SWIPE_UP -> GLOBAL_ACTION_HOME to "Inicio"
-            GESTURE_SWIPE_DOWN_AND_LEFT -> GLOBAL_ACTION_BACK to "Atrás"
-            GESTURE_SWIPE_DOWN_AND_RIGHT -> GLOBAL_ACTION_RECENTS to "Recientes"
+        val (action, spokenRes) = when (gestureId) {
+            GESTURE_SWIPE_UP -> GLOBAL_ACTION_HOME to R.string.spoken_home
+            GESTURE_SWIPE_DOWN_AND_LEFT -> GLOBAL_ACTION_BACK to R.string.spoken_back
+            GESTURE_SWIPE_DOWN_AND_RIGHT -> GLOBAL_ACTION_RECENTS to R.string.spoken_recents
             else -> return false
         }
 
         val done = performGlobalAction(action)
-        if (done && ttsReady) speak(spoken)
+        if (done && ttsReady) speak(getString(spokenRes))
         // P8b: Atrás con el teclado en pantalla lo suele cerrar sin cambiar de
         // pantalla, así que no llegaría un cambio de ventana que lo marcara.
         if (done && action == GLOBAL_ACTION_BACK && keyboardVisible) setKeyboardVisible(false)
@@ -1254,7 +1256,7 @@ class VidenteAccessibilityService :
         if (!continuousReading || continuousPaused) return
         continuousPaused = true
         tts?.stop()
-        speak("Pausa")
+        speak(getString(R.string.spoken_reading_paused))
     }
 
     private fun stopContinuousReading() {
@@ -1271,7 +1273,7 @@ class VidenteAccessibilityService :
         continuousPaused = false
         continuousLines = emptyList()
         continuousIndex = 0
-        speak("Fin de la lectura")
+        speak(getString(R.string.spoken_reading_finished))
     }
 
     private fun repeatLastPhrase() {
@@ -1284,7 +1286,7 @@ class VidenteAccessibilityService :
     private fun cycleNavMode() {
         val values = NavMode.values()
         navMode = values[(navMode.ordinal + 1) % values.size]
-        speak(navMode.label)
+        speak(getString(navMode.labelRes))
     }
 
     private fun moveInMode(forward: Boolean): Boolean = when (navMode) {
@@ -1310,7 +1312,7 @@ class VidenteAccessibilityService :
         val supported = (focused.movementGranularities and granularity) != 0
         if (!supported) {
             focused.recycle()
-            speak("Aquí no hay texto para recorrer")
+            speak(getString(R.string.spoken_no_text_to_traverse))
             return false
         }
 
@@ -1325,7 +1327,7 @@ class VidenteAccessibilityService :
         }
         val done = focused.performAction(action, args)
         focused.recycle()
-        if (!done) speak(if (forward) "Final del texto" else "Principio del texto")
+        if (!done) speak(getString(if (forward) R.string.spoken_text_end else R.string.spoken_text_start))
         return done
     }
 
@@ -1385,12 +1387,14 @@ class VidenteAccessibilityService :
 
         // Borrado puro.
         if (addedText.isEmpty() && removedText.isNotEmpty()) {
+            val space = getString(R.string.spoken_space)
             val what = when {
-                removedText.length > TYPING_ECHO_MAX_CHARS -> "${removedText.length} caracteres"
-                removedText.isBlank() -> "espacio"
-                else -> removedText.trim().ifBlank { "espacio" }
+                removedText.length > TYPING_ECHO_MAX_CHARS ->
+                    getString(R.string.spoken_chars_count, removedText.length)
+                removedText.isBlank() -> space
+                else -> removedText.trim().ifBlank { space }
             }
-            speak("borrado, $what")
+            speak(getString(R.string.spoken_deleted, what))
             return
         }
         if (addedText.isEmpty()) return
@@ -1400,7 +1404,7 @@ class VidenteAccessibilityService :
             when {
                 addedText.length == 1 && !addedText[0].isWhitespace() -> speak(addedText)
                 addedText.length > 1 ->
-                    speak(addedText.take(TYPING_ECHO_MAX_CHARS).trim().ifBlank { "espacio" })
+                    speak(addedText.take(TYPING_ECHO_MAX_CHARS).trim().ifBlank { getString(R.string.spoken_space) })
             }
         }
 
@@ -1450,11 +1454,13 @@ class VidenteAccessibilityService :
         val result = if (found >= 0) {
             val ok = all[found].performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
             if (ok && crossed) {
-                boundaryAnnouncement = if (forward) BOUNDARY_START else BOUNDARY_END
+                boundaryAnnouncement = getString(
+                    if (forward) R.string.spoken_screen_start else R.string.spoken_screen_end
+                )
             }
             ok
         } else {
-            speak("No hay ${mode.label} en la pantalla")
+            speak(getString(R.string.spoken_no_type_on_screen, getString(mode.labelRes)))
             false
         }
         all.forEach { it.recycle() }
@@ -1559,7 +1565,11 @@ class VidenteAccessibilityService :
 
         val t = target ?: return false
         val done = t.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
-        if (done && wrapped) boundaryAnnouncement = if (forward) BOUNDARY_START else BOUNDARY_END
+        if (done && wrapped) {
+            boundaryAnnouncement = getString(
+                if (forward) R.string.spoken_screen_start else R.string.spoken_screen_end
+            )
+        }
         t.recycle()
         return done
     }
@@ -1927,9 +1937,6 @@ class VidenteAccessibilityService :
         // esta ventana, para que el final del propio gesto de arranque no la
         // pause de inmediato.
         private const val CONTINUOUS_START_GUARD_MS = 700L
-
-        private const val BOUNDARY_START = "Principio de la pantalla"
-        private const val BOUNDARY_END = "Final de la pantalla"
 
         private const val WINDOW_TITLE_DEBOUNCE_MS = 300L
         private const val KEYBOARD_DEBOUNCE_MS = 350L
