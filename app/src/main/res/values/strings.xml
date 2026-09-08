@@ -5,7 +5,13 @@
     <string name="open_settings">Abrir ajustes de accesibilidad</string>
     <string name="open_settings_screen">Ajustes de voz</string>
 
-    <string name="settings_title">Ajustes de voz de Vidente</string>
+    <string name="settings_title">Ajustes de Vidente</string>
+    <string name="settings_section_voice">Voz</string>
+    <string name="settings_section_typing">Escritura</string>
+    <string name="settings_section_sound">Sonido y vibración</string>
+    <string name="settings_section_tutorial">Tutorial</string>
+    <string name="settings_section_conversational">Modo conversacional</string>
+    <string name="settings_section_general">General</string>
     <string name="settings_rate_label">Velocidad de voz</string>
     <string name="settings_rate_value">Velocidad: %1$.2fx</string>
     <string name="settings_pitch_label">Tono de voz</string>

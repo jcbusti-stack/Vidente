@@ -12,9 +12,19 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
+            android:layout_marginBottom="16dp"
             android:text="@string/settings_title"
             android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <!-- ===== Voz ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:accessibilityHeading="true"
+            android:text="@string/settings_section_voice"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
         <TextView
@@ -84,22 +94,26 @@
             android:id="@+id/spinnerAudioOutput"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
+            android:layout_marginBottom="16dp"
             android:contentDescription="@string/settings_audio_output_label" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/settings_scroll_feedback_label"
-            android:textSize="16sp" />
-
-        <Spinner
-            android:id="@+id/spinnerScrollFeedback"
+        <Button
+            android:id="@+id/buttonPreview"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
-            android:contentDescription="@string/settings_scroll_feedback_label" />
+            android:text="@string/settings_preview_button" />
+
+        <!-- ===== Escritura ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="12dp"
+            android:accessibilityHeading="true"
+            android:text="@string/settings_section_typing"
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -115,26 +129,59 @@
             android:layout_marginBottom="24dp"
             android:contentDescription="@string/settings_typing_echo_label" />
 
-        <Button
-            android:id="@+id/buttonPreview"
-            android:layout_width="match_parent"
+        <!-- ===== Sonido y vibración ===== -->
+        <TextView
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:layout_marginBottom="12dp"
-            android:text="@string/settings_preview_button" />
+            android:accessibilityHeading="true"
+            android:text="@string/settings_section_sound"
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
-        <Button
-            android:id="@+id/buttonReset"
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="@string/settings_scroll_feedback_label"
+            android:textSize="16sp" />
+
+        <Spinner
+            android:id="@+id/spinnerScrollFeedback"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:contentDescription="@string/settings_scroll_feedback_label" />
+
+        <!-- ===== Tutorial ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:layout_marginBottom="12dp"
-            android:text="@string/settings_reset_button" />
+            android:accessibilityHeading="true"
+            android:text="@string/settings_section_tutorial"
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/buttonReplayTutorial"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="32dp"
+            android:layout_marginBottom="24dp"
             android:text="@string/settings_replay_tutorial" />
+
+        <!-- ===== Modo conversacional ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="12dp"
+            android:accessibilityHeading="true"
+            android:text="@string/settings_section_conversational"
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -174,7 +221,26 @@
             android:id="@+id/buttonSaveBackendConfig"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
             android:text="@string/settings_backend_save" />
+
+        <!-- ===== General ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="12dp"
+            android:accessibilityHeading="true"
+            android:text="@string/settings_section_general"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/buttonReset"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="32dp"
+            android:text="@string/settings_reset_button" />
 
     </LinearLayout>
 </ScrollView>
