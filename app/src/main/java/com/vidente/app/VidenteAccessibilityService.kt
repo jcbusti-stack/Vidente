@@ -7,6 +7,8 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.media.SoundPool
 import android.os.Build
 import android.os.Bundle
@@ -119,6 +121,8 @@ class VidenteAccessibilityService :
     // P8c parte 2: eco de escritura. Qué se dice al teclear en un campo de
     // texto (nada / caracteres / palabras / ambos). Configurable en Ajustes.
     private var typingEcho = VidentePreferences.DEFAULT_TYPING_ECHO
+
+    private val audioManager by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
 
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
@@ -1212,7 +1216,11 @@ class VidenteAccessibilityService :
     private fun handleTextChanged(event: AccessibilityEvent) {
         if (typingEcho == VidentePreferences.TYPING_ECHO_NONE) return
         if (!keyboardVisible) return
-        if (event.isPassword) return
+        // En un campo de contraseña solo se lee lo tecleado si la voz de
+        // Vidente está saliendo por un dispositivo privado (audífonos o
+        // auriculares Bluetooth, audífonos médicos, cascos por cable). Si
+        // sonara por el altavoz del teléfono, un tercero oiría la contraseña.
+        if (event.isPassword && !audioGoesToPrivateOutput()) return
 
         val now = event.text?.joinToString("") ?: return
         val before = event.beforeText?.toString() ?: ""
@@ -1260,6 +1268,20 @@ class VidenteAccessibilityService :
             val word = now.substring(start, end)
             if (word.isNotBlank()) speak(word)
         }
+    }
+
+    /**
+     * ¿Hay un dispositivo de salida privado conectado (audífonos o auriculares
+     * Bluetooth, audífonos médicos, cascos por cable o USB)? Como el TTS de
+     * Vidente usa USAGE_MEDIA, si existe uno de estos la voz sale por ahí y no
+     * por el altavoz. Se usa para permitir el eco de contraseñas solo cuando
+     * nadie más puede oírlas.
+     */
+    private fun audioGoesToPrivateOutput(): Boolean = try {
+        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .any { it.type in PRIVATE_OUTPUT_TYPES }
+    } catch (e: Exception) {
+        false
     }
 
     /**
@@ -1753,6 +1775,23 @@ class VidenteAccessibilityService :
         // Eco de escritura: por encima de esto un borrado o una inserción en
         // bloque se anuncia por número de caracteres, no leyendo el texto.
         private const val TYPING_ECHO_MAX_CHARS = 30
+
+        // Salidas de audio "privadas": la voz llega solo a quien lleva puesto
+        // el dispositivo. Habilitan el eco de contraseña.
+        private val PRIVATE_OUTPUT_TYPES: Set<Int> = buildSet {
+            add(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)
+            add(AudioDeviceInfo.TYPE_BLUETOOTH_SCO)
+            add(AudioDeviceInfo.TYPE_WIRED_HEADSET)
+            add(AudioDeviceInfo.TYPE_WIRED_HEADPHONES)
+            add(AudioDeviceInfo.TYPE_USB_HEADSET)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                add(AudioDeviceInfo.TYPE_HEARING_AID)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(AudioDeviceInfo.TYPE_BLE_HEADSET)
+                add(AudioDeviceInfo.TYPE_BLE_BROADCAST)
+            }
+        }
         private const val SCROLL_TONE_VOL = 0.55f
         private const val BLIP_INTERVAL_MS = 110L
         private const val DIALOG_MAX_CHARS = 400
