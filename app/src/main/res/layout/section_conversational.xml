@@ -42,6 +42,13 @@
         android:id="@+id/buttonSaveBackendConfig"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
         android:text="@string/settings_backend_save" />
+
+    <Button
+        android:id="@+id/buttonRequestMic"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_mic_button" />
 
 </LinearLayout>

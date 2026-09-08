@@ -1,5 +1,7 @@
 package com.vidente.app
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
@@ -14,7 +16,9 @@ import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import java.util.Locale
 
 /**
@@ -25,6 +29,12 @@ import java.util.Locale
 class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private var section: String = SECTION_VOICE
+
+    private val requestMicPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val messageRes = if (granted) R.string.mic_permission_granted else R.string.mic_permission_denied
+            Toast.makeText(this, messageRes, Toast.LENGTH_LONG).show()
+        }
 
     private var tts: TextToSpeech? = null
     private var ttsReady = false
@@ -317,6 +327,20 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
             VidentePreferences.setBackendAccessKey(this, editBackendAccessKey.text.toString())
             Toast.makeText(this, R.string.settings_backend_saved, Toast.LENGTH_SHORT).show()
         }
+
+        findViewById<Button>(R.id.buttonRequestMic).setOnClickListener { requestMicPermissionIfNeeded() }
+
+        if (intent.getBooleanExtra(EXTRA_REQUEST_MIC, false)) requestMicPermissionIfNeeded()
+    }
+
+    private fun requestMicPermissionIfNeeded() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            Toast.makeText(this, R.string.mic_permission_granted, Toast.LENGTH_SHORT).show()
+        } else {
+            requestMicPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
     }
 
     // ---- Ajustes generales ----
@@ -343,6 +367,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
 
     companion object {
         const val EXTRA_SECTION = "section"
+        const val EXTRA_REQUEST_MIC = "request_mic"
         const val SECTION_VOICE = "voice"
         const val SECTION_TYPING = "typing"
         const val SECTION_SOUND = "sound"
