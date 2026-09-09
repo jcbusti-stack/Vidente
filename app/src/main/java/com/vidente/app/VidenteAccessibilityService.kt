@@ -5,6 +5,8 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.content.res.Resources
 import android.graphics.PixelFormat
 import android.media.AudioAttributes
 import android.media.SoundPool
@@ -182,7 +184,7 @@ class VidenteAccessibilityService :
             return
         }
 
-        engine.language = Locale.getDefault()
+        engine.language = LocaleHelper.currentLocale(this)
         applyPreferences(engine)
 
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -236,14 +238,39 @@ class VidenteAccessibilityService :
         engine.setSpeechRate(VidentePreferences.getRate(this))
         engine.setPitch(VidentePreferences.getPitch(this))
 
+        engine.language = LocaleHelper.currentLocale(this)
         val savedVoiceName = VidentePreferences.getVoiceName(this)
-        val voices = VoiceUtils.availableVoicesForLocale(engine, Locale.getDefault())
+        val voices = VoiceUtils.availableVoicesForLocale(engine, LocaleHelper.currentLocale(this))
         val voice = voices.firstOrNull { it.name == savedVoiceName }
-            ?: VoiceUtils.bestVoiceForLocale(engine, Locale.getDefault())
+            ?: VoiceUtils.bestVoiceForLocale(engine, LocaleHelper.currentLocale(this))
         voice?.let { engine.voice = it }
     }
 
+    // Recursos con el idioma elegido en Ajustes; null = seguir el del sistema.
+    // Sobrescribir getResources() hace que todos los getString del servicio
+    // usen ese idioma sin tocarlos uno a uno.
+    private var localeResources: Resources? = null
+
+    override fun getResources(): Resources = localeResources ?: super.getResources()
+
+    private fun refreshLocale() {
+        val tag = VidentePreferences.getAppLanguage(this)
+        localeResources = if (tag == VidentePreferences.APP_LANGUAGE_SYSTEM) {
+            null
+        } else {
+            try {
+                val config = Configuration(super.getResources().configuration)
+                config.setLocale(Locale.forLanguageTag(tag))
+                createConfigurationContext(config).resources
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudo aplicar el idioma '$tag'", e)
+                null
+            }
+        }
+    }
+
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        if (key == VidentePreferences.KEY_APP_LANGUAGE || key == null) refreshLocale()
         tts?.let { applyPreferences(it) }
         refreshScrollFeedback()
 
@@ -264,6 +291,7 @@ class VidenteAccessibilityService :
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "Vidente conectado")
+        refreshLocale()
         refreshImePackages()
         refreshScrollFeedback()
         ensureSoundPool()
@@ -1046,7 +1074,7 @@ class VidenteAccessibilityService :
         val recognizer = SpeechRecognizer.createSpeechRecognizer(this)
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, LocaleHelper.currentLocale(this@VidenteAccessibilityService))
         }
 
         recognizer.setRecognitionListener(object : RecognitionListener {

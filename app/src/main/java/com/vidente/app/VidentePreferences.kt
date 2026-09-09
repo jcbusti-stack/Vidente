@@ -39,6 +39,12 @@ object VidentePreferences {
     const val TYPING_ECHO_CHARS_WORDS = "chars_words"
     const val DEFAULT_TYPING_ECHO = TYPING_ECHO_CHARS_WORDS
 
+    // Idioma de la app y de la voz. "system" = seguir el idioma del teléfono;
+    // si no, una etiqueta BCP-47 ("es", "en", "fr", "de", "pt", "it").
+    const val KEY_APP_LANGUAGE = "app_language"
+    const val APP_LANGUAGE_SYSTEM = "system"
+    const val DEFAULT_APP_LANGUAGE = APP_LANGUAGE_SYSTEM
+
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
     const val MIN_RATE = 0.5f
@@ -122,6 +128,13 @@ object VidentePreferences {
 
     fun setTypingEcho(context: Context, value: String) {
         prefs(context).edit().putString(KEY_TYPING_ECHO, value).apply()
+    }
+
+    fun getAppLanguage(context: Context): String =
+        prefs(context).getString(KEY_APP_LANGUAGE, DEFAULT_APP_LANGUAGE) ?: DEFAULT_APP_LANGUAGE
+
+    fun setAppLanguage(context: Context, value: String) {
+        prefs(context).edit().putString(KEY_APP_LANGUAGE, value).apply()
     }
 
     /**

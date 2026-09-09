@@ -1,5 +1,6 @@
 package com.vidente.app
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
@@ -10,6 +11,10 @@ import androidx.appcompat.app.AppCompatActivity
  * pantalla (SettingsSectionActivity); desde ahí se vuelve aquí.
  */
 class SettingsActivity : AppCompatActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

@@ -1,6 +1,7 @@
 package com.vidente.app
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.os.Bundle
@@ -30,6 +31,10 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
 
     private var section: String = SECTION_VOICE
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase))
+    }
+
     private val requestMicPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             val messageRes = if (granted) R.string.mic_permission_granted else R.string.mic_permission_denied
@@ -44,6 +49,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     private var textRateValue: TextView? = null
     private var seekPitch: SeekBar? = null
     private var textPitchValue: TextView? = null
+    private var spinnerLanguage: Spinner? = null
     private var spinnerVoice: Spinner? = null
     private var spinnerAudioOutput: Spinner? = null
     private var spinnerScrollFeedback: Spinner? = null
@@ -62,6 +68,9 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         VidentePreferences.TYPING_ECHO_CHARS,
         VidentePreferences.TYPING_ECHO_WORDS,
         VidentePreferences.TYPING_ECHO_NONE
+    )
+    private val languageValues = listOf(
+        VidentePreferences.APP_LANGUAGE_SYSTEM, "es", "en", "fr", "de", "pt", "it"
     )
 
     private var currentRate = VidentePreferences.DEFAULT_RATE
@@ -105,12 +114,14 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         textRateValue = findViewById(R.id.textRateValue)
         seekPitch = findViewById(R.id.seekPitch)
         textPitchValue = findViewById(R.id.textPitchValue)
+        spinnerLanguage = findViewById(R.id.spinnerLanguage)
         spinnerVoice = findViewById(R.id.spinnerVoice)
         spinnerAudioOutput = findViewById(R.id.spinnerAudioOutput)
 
         currentRate = VidentePreferences.getRate(this)
         currentPitch = VidentePreferences.getPitch(this)
 
+        setUpLanguageSpinner()
         setUpRateSeekBar()
         setUpPitchSeekBar()
         setUpAudioOutputSpinner()
@@ -118,6 +129,31 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         findViewById<Button>(R.id.buttonPreview).setOnClickListener { previewVoice() }
 
         tts = TextToSpeech(this, this)
+    }
+
+    private fun setUpLanguageSpinner() {
+        val spinner = spinnerLanguage ?: return
+        val labels = listOf(
+            getString(R.string.settings_language_system),
+            getString(R.string.language_name_es),
+            getString(R.string.language_name_en),
+            getString(R.string.language_name_fr),
+            getString(R.string.language_name_de),
+            getString(R.string.language_name_pt),
+            getString(R.string.language_name_it)
+        )
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.setSelection(languageValues.indexOf(VidentePreferences.getAppLanguage(this)).coerceAtLeast(0))
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                val chosen = languageValues[position]
+                if (chosen == VidentePreferences.getAppLanguage(this@SettingsSectionActivity)) return
+                VidentePreferences.setAppLanguage(this@SettingsSectionActivity, chosen)
+                recreate()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
     }
 
     private fun setUpRateSeekBar() {
@@ -219,11 +255,11 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         val engine = tts ?: return
         if (status != TextToSpeech.SUCCESS) return
 
-        engine.language = Locale.getDefault()
+        engine.language = LocaleHelper.currentLocale(this)
         ttsReady = true
 
         applyAudioOutputToTts()
-        availableVoices = VoiceUtils.availableVoicesForLocale(engine, Locale.getDefault())
+        availableVoices = VoiceUtils.availableVoicesForLocale(engine, LocaleHelper.currentLocale(this))
         setUpVoiceSpinner()
     }
 
@@ -252,7 +288,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     private fun applyVoiceToTts(voiceName: String?) {
         val engine = tts ?: return
         val voice = availableVoices.firstOrNull { it.name == voiceName }
-        engine.voice = voice ?: VoiceUtils.bestVoiceForLocale(engine, Locale.getDefault())
+        engine.voice = voice ?: VoiceUtils.bestVoiceForLocale(engine, LocaleHelper.currentLocale(this))
     }
 
     private fun previewVoice() {
