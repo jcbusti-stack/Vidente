@@ -15,6 +15,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.SeekBar
 import android.widget.Spinner
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -55,7 +56,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     private var spinnerScrollFeedback: Spinner? = null
     private var spinnerTypingEcho: Spinner? = null
     private var spinnerKeyboardWriteMode: Spinner? = null
-    private var spinnerCursorAnnounce: Spinner? = null
+    private var switchCursorAnnounce: Switch? = null
 
     private val audioOutputValues = listOf(
         VidentePreferences.AUDIO_OUTPUT_MEDIA,
@@ -77,10 +78,6 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     private val keyboardWriteModeValues = listOf(
         VidentePreferences.WRITE_MODE_DOUBLE_TAP,
         VidentePreferences.WRITE_MODE_SLIDE_RELEASE
-    )
-    private val cursorAnnounceValues = listOf(
-        VidentePreferences.CURSOR_ANNOUNCE_ON,
-        VidentePreferences.CURSOR_ANNOUNCE_OFF
     )
 
     private var currentRate = VidentePreferences.DEFAULT_RATE
@@ -358,22 +355,14 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     }
 
     private fun setUpCursorAnnounceSpinner() {
-        spinnerCursorAnnounce = findViewById(R.id.spinnerCursorAnnounce)
-        val spinner = spinnerCursorAnnounce ?: return
-        val labels = listOf(
-            getString(R.string.settings_cursor_announce_on),
-            getString(R.string.settings_cursor_announce_off)
-        )
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-        spinner.setSelection(
-            cursorAnnounceValues.indexOf(VidentePreferences.getCursorAnnounce(this)).coerceAtLeast(0)
-        )
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                VidentePreferences.setCursorAnnounce(this@SettingsSectionActivity, cursorAnnounceValues[position])
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
+        switchCursorAnnounce = findViewById(R.id.switchCursorAnnounce)
+        val switch = switchCursorAnnounce ?: return
+        switch.isChecked = VidentePreferences.getCursorAnnounce(this) == VidentePreferences.CURSOR_ANNOUNCE_ON
+        switch.setOnCheckedChangeListener { _, isChecked ->
+            VidentePreferences.setCursorAnnounce(
+                this@SettingsSectionActivity,
+                if (isChecked) VidentePreferences.CURSOR_ANNOUNCE_ON else VidentePreferences.CURSOR_ANNOUNCE_OFF
+            )
         }
     }
 
