@@ -14,6 +14,10 @@ object VidentePreferences {
     const val KEY_DEVICE_ID = "device_id"
     const val KEY_TUTORIAL_DONE = "tutorial_done"
     const val KEY_TUTORIAL_REQUESTED = "tutorial_requested"
+    // Xiaomi no deja consultar por código si "Inicio automático en segundo
+    // plano" quedó activado: el propio usuario lo marca a mano en el
+    // asistente de configuración después de activarlo.
+    const val KEY_XIAOMI_AUTOSTART_CONFIRMED = "xiaomi_autostart_confirmed"
     const val KEY_AUDIO_OUTPUT = "audio_output"
 
     // Ruta de audio del TTS. "media" usa USAGE_MEDIA, que sigue la salida
@@ -114,6 +118,13 @@ object VidentePreferences {
 
     fun setTutorialDone(context: Context, done: Boolean) {
         prefs(context).edit().putBoolean(KEY_TUTORIAL_DONE, done).apply()
+    }
+
+    fun isXiaomiAutostartConfirmed(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_XIAOMI_AUTOSTART_CONFIRMED, false)
+
+    fun setXiaomiAutostartConfirmed(context: Context, confirmed: Boolean) {
+        prefs(context).edit().putBoolean(KEY_XIAOMI_AUTOSTART_CONFIRMED, confirmed).apply()
     }
 
     /**

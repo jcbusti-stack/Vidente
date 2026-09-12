@@ -62,9 +62,17 @@
             android:id="@+id/textStepAutostartHint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="4dp"
             android:text="@string/wizard_step_autostart_hint"
             android:textSize="13sp"
+            android:visibility="gone" />
+
+        <CheckBox
+            android:id="@+id/checkStepAutostartConfirmed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="@string/wizard_step_autostart_confirm"
             android:visibility="gone" />
 
         <Button

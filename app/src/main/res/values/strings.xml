@@ -18,6 +18,7 @@
     <string name="wizard_step_mic_hint">Hace falta solo para el asistente conversacional; el resto de Vidente funciona sin esto.</string>
     <string name="wizard_step_autostart">Abrir inicio automático en segundo plano (Xiaomi), %1$s</string>
     <string name="wizard_step_autostart_hint">Xiaomi no permite comprobar este paso por código: actívalo vos mismo en esa pantalla y volvé acá.</string>
+    <string name="wizard_step_autostart_confirm">Ya lo activé</string>
     <string name="wizard_step_accessibility">Activar el servicio de Vidente, %1$s</string>
     <string name="wizard_step_accessibility_hint">Último paso: sin esto, Vidente no puede leer la pantalla.</string>
     <string name="wizard_open_app_settings">Otras opciones de Vidente</string>

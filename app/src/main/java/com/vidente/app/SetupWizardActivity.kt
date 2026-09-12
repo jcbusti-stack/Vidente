@@ -9,7 +9,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -60,9 +63,17 @@ class SetupWizardActivity : AppCompatActivity() {
         }
 
         if (isXiaomi) {
-            findViewById<Button>(R.id.buttonStepAutostart).visibility = android.view.View.VISIBLE
-            findViewById<android.widget.TextView>(R.id.textStepAutostartHint).visibility = android.view.View.VISIBLE
+            findViewById<Button>(R.id.buttonStepAutostart).visibility = View.VISIBLE
+            findViewById<TextView>(R.id.textStepAutostartHint).visibility = View.VISIBLE
             findViewById<Button>(R.id.buttonStepAutostart).setOnClickListener { openXiaomiAutostart() }
+
+            val checkConfirmed = findViewById<CheckBox>(R.id.checkStepAutostartConfirmed)
+            checkConfirmed.visibility = View.VISIBLE
+            checkConfirmed.isChecked = VidentePreferences.isXiaomiAutostartConfirmed(this)
+            checkConfirmed.setOnCheckedChangeListener { _, isChecked ->
+                VidentePreferences.setXiaomiAutostartConfirmed(this, isChecked)
+                refreshStepLabels()
+            }
         }
 
         findViewById<Button>(R.id.buttonStepAccessibility).setOnClickListener {
@@ -94,10 +105,15 @@ class SetupWizardActivity : AppCompatActivity() {
         findViewById<Button>(R.id.buttonStepMic).text =
             getString(R.string.wizard_step_mic, statusText(hasMicPermission()))
         if (isXiaomi) {
-            // Xiaomi no expone forma de consultar este ajuste por código: se
-            // deja siempre en "revisar", nunca se puede marcar "hecho" solo.
+            // Xiaomi no expone forma de consultar este ajuste por código: el
+            // estado viene de la casilla que el propio usuario marca a mano.
+            val status = if (VidentePreferences.isXiaomiAutostartConfirmed(this)) {
+                getString(R.string.wizard_status_done)
+            } else {
+                getString(R.string.wizard_status_unknown)
+            }
             findViewById<Button>(R.id.buttonStepAutostart).text =
-                getString(R.string.wizard_step_autostart, getString(R.string.wizard_status_unknown))
+                getString(R.string.wizard_step_autostart, status)
         }
         findViewById<Button>(R.id.buttonStepAccessibility).text =
             getString(R.string.wizard_step_accessibility, statusText(isAccessibilityServiceEnabled()))

@@ -18,6 +18,7 @@
     <string name="wizard_step_mic_hint">Only needed for the conversational assistant; the rest of Vidente works without this.</string>
     <string name="wizard_step_autostart">Open background autostart (Xiaomi), %1$s</string>
     <string name="wizard_step_autostart_hint">Xiaomi doesn\'t let this be checked by code: turn it on yourself on that screen and come back here.</string>
+    <string name="wizard_step_autostart_confirm">I already turned it on</string>
     <string name="wizard_step_accessibility">Turn on the Vidente service, %1$s</string>
     <string name="wizard_step_accessibility_hint">Last step: without this, Vidente can\'t read the screen.</string>
     <string name="wizard_open_app_settings">Other Vidente options</string>
