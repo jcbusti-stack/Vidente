@@ -48,7 +48,7 @@
     <string name="spoken_keyboard_shown">Keyboard shown</string>
     <string name="spoken_keyboard_hidden">Keyboard hidden</string>
 
-    <string name="spoken_deleted">deleted, %1$s</string>
+    <string name="spoken_deleted">%1$s, deleted</string>
     <string name="spoken_space">space</string>
     <string name="spoken_chars_count">%1$d characters</string>
 

@@ -54,7 +54,7 @@
     <string name="spoken_keyboard_shown">Teclado en pantalla</string>
     <string name="spoken_keyboard_hidden">Teclado oculto</string>
 
-    <string name="spoken_deleted">borrado, %1$s</string>
+    <string name="spoken_deleted">%1$s, borrado</string>
     <string name="spoken_space">espacio</string>
     <string name="spoken_chars_count">%1$d caracteres</string>
 
