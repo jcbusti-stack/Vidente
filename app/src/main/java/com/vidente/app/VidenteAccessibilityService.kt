@@ -166,10 +166,6 @@ class VidenteAccessibilityService :
     // Modo de escritura en teclado: doble toque (de siempre) o deslizar y
     // soltar. Configurable en Ajustes; por defecto queda el de siempre.
     private var keyboardWriteMode = VidentePreferences.DEFAULT_KEYBOARD_WRITE_MODE
-    // Momento del último gesto reconocido (doble toque, deslizar, etc.). Si el
-    // dedo se levanta justo después de uno, TYPE_TOUCH_INTERACTION_END no debe
-    // activar nada: ese gesto ya hizo su acción, o fue navegación, no escritura.
-    private var lastGestureAt = 0L
 
     // Anuncio de posición del cursor: al moverlo en un campo de texto, decir
     // "Principio/Final del texto" en los extremos, leer el carácter recorrido,
@@ -1234,11 +1230,6 @@ class VidenteAccessibilityService :
      * de modo se anuncia siempre, así un ciclo accidental se deshace ciclando.
      */
     override fun onGesture(gestureId: Int): Boolean {
-        // Marca de "hubo un gesto reconocido ahora": handleTouchInteractionEnd
-        // la usa para no activar nada cuando el dedo se levanta de un gesto
-        // real (doble toque, deslizar), no de explorar el teclado.
-        lastGestureAt = SystemClock.uptimeMillis()
-
         if (tutorialStep != TutorialStep.NONE) return handleTutorialGesture(gestureId)
 
         // Un gesto cuenta como interacción con la pantalla actual.
@@ -1952,17 +1943,22 @@ class VidenteAccessibilityService :
      * la misma lógica que ya usa el doble toque para encontrar y activar la
      * tecla que el usuario acaba de explorar.
      *
-     * Solo actúa si: el usuario eligió este modo en Ajustes, el teclado está
-     * en pantalla, y el dedo no se acaba de levantar de un gesto reconocido
-     * (doble toque, deslizar): esos ya hicieron su propia acción, o son
-     * navegación y no escritura. Sin este resguardo, cualquier deslizamiento
-     * con el teclado abierto (p. ej. cambiar de modo de navegación) también
-     * escribiría la tecla bajo el dedo al soltar.
+     * Solo actúa si el usuario eligió este modo en Ajustes y el teclado está
+     * en pantalla: en ese contexto, cualquier deslizamiento sobre el teclado
+     * ES la escritura que se busca, así que se activa siempre al soltar.
+     *
+     * (Antes también exigía que el dedo no se hubiera levantado de un gesto
+     * reconocido hace poco, pensado para no escribir tras un gesto de
+     * navegación ajeno al teclado. Pero el propio deslizamiento para escribir
+     * -sobre todo en línea recta, p. ej. varias teclas de la fila superior-
+     * puede coincidir con el patrón de un gesto de deslizar, así que esa
+     * protección bloqueaba la escritura el 100% de las veces. Con el teclado
+     * visible y este modo activo ya no hace falta: no hay otro gesto de
+     * navegación válido que deba ganarle a la escritura ahí.)
      */
     private fun handleTouchInteractionEnd() {
         if (keyboardWriteMode != VidentePreferences.WRITE_MODE_SLIDE_RELEASE) return
         if (!keyboardVisible) return
-        if (SystemClock.uptimeMillis() - lastGestureAt < TOUCH_END_GESTURE_GUARD_MS) return
         activateFocusedElement()
     }
 
@@ -2186,10 +2182,6 @@ class VidenteAccessibilityService :
         // Tras P7 (recorrer texto) o al escribir/borrar, se ignora el cambio de
         // selección que llega justo después (ya se leyó por su propio camino).
         private const val CURSOR_ECHO_SUPPRESS_MS = 400L
-        // Deslizar y soltar: si el dedo se levantó de un gesto reconocido hace
-        // menos de esto, no se activa la tecla bajo el dedo (ese gesto ya hizo
-        // su acción, o fue navegación).
-        private const val TOUCH_END_GESTURE_GUARD_MS = 250L
 
         // Apps de mensajería: el campo de escribir se anuncia como "mensaje,
         // cuadro de edición" en vez de solo "cuadro de edición".
