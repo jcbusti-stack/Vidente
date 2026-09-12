@@ -45,6 +45,24 @@ object VidentePreferences {
     const val APP_LANGUAGE_SYSTEM = "system"
     const val DEFAULT_APP_LANGUAGE = APP_LANGUAGE_SYSTEM
 
+    // Modo de escritura en teclado: doble toque (el de siempre) o deslizar y
+    // soltar (estilo Jieshuo/TalkBack: se recorre el teclado con el dedo y al
+    // levantarlo sobre una tecla, esa tecla se escribe). Por defecto queda el
+    // comportamiento de siempre.
+    const val KEY_KEYBOARD_WRITE_MODE = "keyboard_write_mode"
+    const val WRITE_MODE_DOUBLE_TAP = "double_tap"
+    const val WRITE_MODE_SLIDE_RELEASE = "slide_release"
+    const val DEFAULT_KEYBOARD_WRITE_MODE = WRITE_MODE_DOUBLE_TAP
+
+    // Anuncio de posición del cursor: al moverlo dentro de un campo de texto,
+    // decir "Principio/Final del texto" en los extremos, leer el carácter
+    // recorrido, y leer la selección si hay texto seleccionado. Por defecto
+    // activado (pedido explícito), pero apagable de un toque si algo falla.
+    const val KEY_CURSOR_ANNOUNCE = "cursor_announce"
+    const val CURSOR_ANNOUNCE_ON = "on"
+    const val CURSOR_ANNOUNCE_OFF = "off"
+    const val DEFAULT_CURSOR_ANNOUNCE = CURSOR_ANNOUNCE_ON
+
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
     const val MIN_RATE = 0.5f
@@ -135,6 +153,21 @@ object VidentePreferences {
 
     fun setAppLanguage(context: Context, value: String) {
         prefs(context).edit().putString(KEY_APP_LANGUAGE, value).apply()
+    }
+
+    fun getKeyboardWriteMode(context: Context): String =
+        prefs(context).getString(KEY_KEYBOARD_WRITE_MODE, DEFAULT_KEYBOARD_WRITE_MODE)
+            ?: DEFAULT_KEYBOARD_WRITE_MODE
+
+    fun setKeyboardWriteMode(context: Context, value: String) {
+        prefs(context).edit().putString(KEY_KEYBOARD_WRITE_MODE, value).apply()
+    }
+
+    fun getCursorAnnounce(context: Context): String =
+        prefs(context).getString(KEY_CURSOR_ANNOUNCE, DEFAULT_CURSOR_ANNOUNCE) ?: DEFAULT_CURSOR_ANNOUNCE
+
+    fun setCursorAnnounce(context: Context, value: String) {
+        prefs(context).edit().putString(KEY_CURSOR_ANNOUNCE, value).apply()
     }
 
     /**

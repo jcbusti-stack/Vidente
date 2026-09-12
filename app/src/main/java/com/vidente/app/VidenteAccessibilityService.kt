@@ -163,6 +163,26 @@ class VidenteAccessibilityService :
     // texto (nada / caracteres / palabras / ambos). Configurable en Ajustes.
     private var typingEcho = VidentePreferences.DEFAULT_TYPING_ECHO
 
+    // Modo de escritura en teclado: doble toque (de siempre) o deslizar y
+    // soltar. Configurable en Ajustes; por defecto queda el de siempre.
+    private var keyboardWriteMode = VidentePreferences.DEFAULT_KEYBOARD_WRITE_MODE
+    // Momento del último gesto reconocido (doble toque, deslizar, etc.). Si el
+    // dedo se levanta justo después de uno, TYPE_TOUCH_INTERACTION_END no debe
+    // activar nada: ese gesto ya hizo su acción, o fue navegación, no escritura.
+    private var lastGestureAt = 0L
+
+    // Anuncio de posición del cursor: al moverlo en un campo de texto, decir
+    // "Principio/Final del texto" en los extremos, leer el carácter recorrido,
+    // y leer la selección si hay texto seleccionado. Configurable en Ajustes;
+    // por defecto activado.
+    private var cursorAnnounceEnabled = true
+    private var lastCursorIndex = -1
+    // Tras un movimiento de P7 (recorrer por carácter/palabra/línea/párrafo,
+    // que ya lee el fragmento y ya anuncia el borde) o al escribir/borrar (que
+    // ya tiene su propio eco) llega un cambio de selección: se ignora hasta
+    // este instante para no leer todo dos veces.
+    private var suppressCursorEchoUntil = 0L
+
     private var windowManager: WindowManager? = null
     private var floatingButton: View? = null
     private val backendAssistant: ConversationalAssistant by lazy { BackendConversationalAssistant(this) }
@@ -357,6 +377,31 @@ class VidenteAccessibilityService :
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED ->
                 if (tutorialStep == TutorialStep.NONE) handleTextChanged(event)
 
+            // Anuncio de posición del cursor (configurable). Se envuelve en su
+            // propio try/catch: si algo de esto falla, no debe tumbar el resto
+            // del servicio (fue justo este tipo de cambio el que en su momento
+            // dejó a Vidente sin leer nada).
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED ->
+                if (tutorialStep == TutorialStep.NONE && cursorAnnounceEnabled) {
+                    try {
+                        handleTextSelectionChanged(event)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Fallo anunciando la posición del cursor", e)
+                    }
+                }
+
+            // Modo de escritura "deslizar y soltar": al levantar el dedo tras
+            // explorar el teclado, escribe la tecla que se estaba explorando.
+            // Mismo cuidado: en su propio try/catch.
+            AccessibilityEvent.TYPE_TOUCH_INTERACTION_END ->
+                if (tutorialStep == TutorialStep.NONE) {
+                    try {
+                        handleTouchInteractionEnd()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Fallo activando por deslizar y soltar", e)
+                    }
+                }
+
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_SELECTED,
             AccessibilityEvent.TYPE_ANNOUNCEMENT -> Unit
@@ -391,6 +436,8 @@ class VidenteAccessibilityService :
         prevFocusedNode = null
         lastFocusedNodeAt = 0L
         prevFocusedNodeAt = 0L
+        // El cursor de la pantalla anterior no tiene nada que ver con la nueva.
+        lastCursorIndex = -1
     }
 
     /**
@@ -552,6 +599,9 @@ class VidenteAccessibilityService :
         scrollFeedbackTone =
             VidentePreferences.getScrollFeedback(this) == VidentePreferences.SCROLL_FEEDBACK_TONE
         typingEcho = VidentePreferences.getTypingEcho(this)
+        keyboardWriteMode = VidentePreferences.getKeyboardWriteMode(this)
+        cursorAnnounceEnabled =
+            VidentePreferences.getCursorAnnounce(this) == VidentePreferences.CURSOR_ANNOUNCE_ON
     }
 
     /**
@@ -786,6 +836,8 @@ class VidenteAccessibilityService :
 
         lastSpoken = text
         lastSpokenAt = now
+        // Nuevo elemento enfocado: el índice de cursor de lo anterior no aplica.
+        lastCursorIndex = -1
         val toSpeak = if (boundary != null) "$boundary. $text" else text
         if (ttsReady) speak(toSpeak) else pendingText = toSpeak
 
@@ -1160,6 +1212,11 @@ class VidenteAccessibilityService :
      * de modo se anuncia siempre, así un ciclo accidental se deshace ciclando.
      */
     override fun onGesture(gestureId: Int): Boolean {
+        // Marca de "hubo un gesto reconocido ahora": handleTouchInteractionEnd
+        // la usa para no activar nada cuando el dedo se levanta de un gesto
+        // real (doble toque, deslizar), no de explorar el teclado.
+        lastGestureAt = SystemClock.uptimeMillis()
+
         if (tutorialStep != TutorialStep.NONE) return handleTutorialGesture(gestureId)
 
         // Un gesto cuenta como interacción con la pantalla actual.
@@ -1358,7 +1415,13 @@ class VidenteAccessibilityService :
         }
         val done = focused.performAction(action, args)
         focused.recycle()
-        if (!done) speak(getString(if (forward) R.string.spoken_text_end else R.string.spoken_text_start))
+        if (done) {
+            // El cambio de selección que dispara esta acción ya se cubre con
+            // el fragmento que lee handleTextTraversed: no leerlo de nuevo.
+            suppressCursorEchoUntil = SystemClock.uptimeMillis() + CURSOR_ECHO_SUPPRESS_MS
+        } else {
+            speak(getString(if (forward) R.string.spoken_text_end else R.string.spoken_text_start))
+        }
         return done
     }
 
@@ -1387,6 +1450,14 @@ class VidenteAccessibilityService :
      * campos no describían bien un borrado suelto.
      */
     private fun handleTextChanged(event: AccessibilityEvent) {
+        // Escribir o borrar (con eco activado o no) también dispara un cambio
+        // de selección justo después: se suprime siempre que sea del teclado
+        // en pantalla, para que el anuncio de cursor no vuelva a leer lo que
+        // ya se dijo (o reactive un eco que el usuario apagó a propósito).
+        if (keyboardVisible) {
+            suppressCursorEchoUntil = SystemClock.uptimeMillis() + CURSOR_ECHO_SUPPRESS_MS
+        }
+
         if (typingEcho == VidentePreferences.TYPING_ECHO_NONE) return
         if (!keyboardVisible) return
 
@@ -1447,6 +1518,72 @@ class VidenteAccessibilityService :
             while (start > 0 && !now[start - 1].isWhitespace()) start--
             val word = now.substring(start, end)
             if (word.isNotBlank()) speak(word)
+        }
+    }
+
+    /**
+     * Anuncio de posición del cursor (configurable; por defecto activado). Al
+     * moverse dentro de un campo de texto por cualquier vía (tocar el texto
+     * para reposicionar el cursor, las flechas del teclado, etc. — no solo
+     * P7): en los extremos dice "Principio del texto" / "Final del texto"; si
+     * no está en un extremo, lee el carácter que el cursor acaba de pasar; si
+     * hay selección, la lee entera (o la cantidad de caracteres, si es larga).
+     *
+     * No repite lo que ya leyeron P7 (moveByGranularity/handleTextTraversed) o
+     * el eco de escritura (handleTextChanged): ambos fijan
+     * suppressCursorEchoUntil justo antes de mover el cursor por su cuenta.
+     */
+    private fun handleTextSelectionChanged(event: AccessibilityEvent) {
+        if (SystemClock.uptimeMillis() < suppressCursorEchoUntil) return
+
+        val text = event.text?.joinToString("") ?: return
+        if (text.isEmpty()) {
+            lastCursorIndex = -1
+            return
+        }
+
+        val from = event.fromIndex
+        val to = event.toIndex
+        if (from < 0 || to < 0) return
+
+        // Hay texto seleccionado (from != to): se lee la selección, no el
+        // cursor. Un índice de cursor de después no tendría sentido: se
+        // vuelve a establecer recién cuando la selección se cierre.
+        if (from != to) {
+            val a = minOf(from, to)
+            val b = maxOf(from, to)
+            if (a in 0..text.length && b in a..text.length) {
+                val sel = text.substring(a, b)
+                if (sel.length <= SELECTION_SPEAK_MAX_CHARS) {
+                    speak(getString(R.string.spoken_selected_text, sel))
+                } else {
+                    speak(getString(R.string.spoken_selected_count, b - a))
+                }
+            }
+            lastCursorIndex = -1
+            return
+        }
+
+        val prev = lastCursorIndex
+        lastCursorIndex = from
+        // Primer evento tras enfocar el campo (o tras cerrar una selección):
+        // solo se establece la posición de referencia, sin anunciar nada; si
+        // no, cada campo enfocado diría "Principio del texto" al entrar.
+        if (prev < 0 || from == prev) return
+
+        if (from >= text.length && prev < text.length) {
+            speak(getString(R.string.spoken_text_end))
+            return
+        }
+        if (from <= 0 && prev > 0) {
+            speak(getString(R.string.spoken_text_start))
+            return
+        }
+
+        val idx = if (from > prev) from - 1 else from
+        if (idx in text.indices) {
+            val ch = text[idx]
+            speak(if (ch.isWhitespace()) getString(R.string.spoken_space) else ch.toString())
         }
     }
 
@@ -1776,6 +1913,27 @@ class VidenteAccessibilityService :
         return done
     }
 
+    /**
+     * Modo de escritura "deslizar y soltar" (estilo Jieshuo/TalkBack): en vez
+     * de doble toque, alcanza con recorrer el teclado y levantar el dedo
+     * sobre la tecla deseada para escribirla. Reutiliza activateFocusedElement,
+     * la misma lógica que ya usa el doble toque para encontrar y activar la
+     * tecla que el usuario acaba de explorar.
+     *
+     * Solo actúa si: el usuario eligió este modo en Ajustes, el teclado está
+     * en pantalla, y el dedo no se acaba de levantar de un gesto reconocido
+     * (doble toque, deslizar): esos ya hicieron su propia acción, o son
+     * navegación y no escritura. Sin este resguardo, cualquier deslizamiento
+     * con el teclado abierto (p. ej. cambiar de modo de navegación) también
+     * escribiría la tecla bajo el dedo al soltar.
+     */
+    private fun handleTouchInteractionEnd() {
+        if (keyboardWriteMode != VidentePreferences.WRITE_MODE_SLIDE_RELEASE) return
+        if (!keyboardVisible) return
+        if (SystemClock.uptimeMillis() - lastGestureAt < TOUCH_END_GESTURE_GUARD_MS) return
+        activateFocusedElement()
+    }
+
     private fun nearestClickable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         if (node.isClickable) return node
 
@@ -1989,6 +2147,17 @@ class VidenteAccessibilityService :
         // más tiempo, viene del segundo toque del doble toque, no de una
         // exploración nueva del usuario (que se para a escuchar el anuncio).
         private const val DOUBLE_TAP_OWN_HOVER_MS = 320L
+
+        // Anuncio de posición del cursor: por encima de esto, la selección se
+        // dice como cantidad de caracteres en vez de leerla entera.
+        private const val SELECTION_SPEAK_MAX_CHARS = 60
+        // Tras P7 (recorrer texto) o al escribir/borrar, se ignora el cambio de
+        // selección que llega justo después (ya se leyó por su propio camino).
+        private const val CURSOR_ECHO_SUPPRESS_MS = 400L
+        // Deslizar y soltar: si el dedo se levantó de un gesto reconocido hace
+        // menos de esto, no se activa la tecla bajo el dedo (ese gesto ya hizo
+        // su acción, o fue navegación).
+        private const val TOUCH_END_GESTURE_GUARD_MS = 250L
 
         // Apps de mensajería: el campo de escribir se anuncia como "mensaje,
         // cuadro de edición" en vez de solo "cuadro de edición".

@@ -45,6 +45,8 @@
     <string name="spoken_text_start">Principio del texto</string>
     <string name="spoken_text_end">Final del texto</string>
     <string name="spoken_no_text_to_traverse">Aquí no hay texto para recorrer</string>
+    <string name="spoken_selected_text">%1$s, seleccionado</string>
+    <string name="spoken_selected_count">%1$d caracteres seleccionados</string>
 
     <string name="spoken_reading_paused">Pausa</string>
     <string name="spoken_reading_finished">Fin de la lectura</string>
@@ -128,6 +130,12 @@
     <string name="settings_typing_echo_chars">Solo caracteres</string>
     <string name="settings_typing_echo_words">Solo palabras</string>
     <string name="settings_typing_echo_none">Desactivado</string>
+    <string name="settings_keyboard_write_mode_label">Modo de escritura en teclado</string>
+    <string name="settings_keyboard_write_mode_double_tap">Doble toque (el actual)</string>
+    <string name="settings_keyboard_write_mode_slide_release">Deslizar y soltar</string>
+    <string name="settings_cursor_announce_label">Anuncio de posición del cursor</string>
+    <string name="settings_cursor_announce_on">Activado</string>
+    <string name="settings_cursor_announce_off">Desactivado</string>
 
     <string name="settings_backend_url_label">Dirección del servidor de Vidente (para el modo conversacional)</string>
     <string name="settings_backend_url_hint">Ej: https://mi-vidente.onrender.com</string>

@@ -54,6 +54,8 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     private var spinnerAudioOutput: Spinner? = null
     private var spinnerScrollFeedback: Spinner? = null
     private var spinnerTypingEcho: Spinner? = null
+    private var spinnerKeyboardWriteMode: Spinner? = null
+    private var spinnerCursorAnnounce: Spinner? = null
 
     private val audioOutputValues = listOf(
         VidentePreferences.AUDIO_OUTPUT_MEDIA,
@@ -71,6 +73,14 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     )
     private val languageValues = listOf(
         VidentePreferences.APP_LANGUAGE_SYSTEM, "es", "en", "fr", "de", "pt", "it"
+    )
+    private val keyboardWriteModeValues = listOf(
+        VidentePreferences.WRITE_MODE_DOUBLE_TAP,
+        VidentePreferences.WRITE_MODE_SLIDE_RELEASE
+    )
+    private val cursorAnnounceValues = listOf(
+        VidentePreferences.CURSOR_ANNOUNCE_ON,
+        VidentePreferences.CURSOR_ANNOUNCE_OFF
     )
 
     private var currentRate = VidentePreferences.DEFAULT_RATE
@@ -320,6 +330,51 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
 
             override fun onNothingSelected(parent: AdapterView<*>) {}
         }
+
+        setUpKeyboardWriteModeSpinner()
+        setUpCursorAnnounceSpinner()
+    }
+
+    private fun setUpKeyboardWriteModeSpinner() {
+        spinnerKeyboardWriteMode = findViewById(R.id.spinnerKeyboardWriteMode)
+        val spinner = spinnerKeyboardWriteMode ?: return
+        val labels = listOf(
+            getString(R.string.settings_keyboard_write_mode_double_tap),
+            getString(R.string.settings_keyboard_write_mode_slide_release)
+        )
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.setSelection(
+            keyboardWriteModeValues.indexOf(VidentePreferences.getKeyboardWriteMode(this)).coerceAtLeast(0)
+        )
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                VidentePreferences.setKeyboardWriteMode(
+                    this@SettingsSectionActivity, keyboardWriteModeValues[position]
+                )
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+    }
+
+    private fun setUpCursorAnnounceSpinner() {
+        spinnerCursorAnnounce = findViewById(R.id.spinnerCursorAnnounce)
+        val spinner = spinnerCursorAnnounce ?: return
+        val labels = listOf(
+            getString(R.string.settings_cursor_announce_on),
+            getString(R.string.settings_cursor_announce_off)
+        )
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.setSelection(
+            cursorAnnounceValues.indexOf(VidentePreferences.getCursorAnnounce(this)).coerceAtLeast(0)
+        )
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                VidentePreferences.setCursorAnnounce(this@SettingsSectionActivity, cursorAnnounceValues[position])
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
     }
 
     // ---- Sonidos y vibración ----
@@ -392,6 +447,8 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         VidentePreferences.setAudioOutput(this, VidentePreferences.DEFAULT_AUDIO_OUTPUT)
         VidentePreferences.setScrollFeedback(this, VidentePreferences.DEFAULT_SCROLL_FEEDBACK)
         VidentePreferences.setTypingEcho(this, VidentePreferences.DEFAULT_TYPING_ECHO)
+        VidentePreferences.setKeyboardWriteMode(this, VidentePreferences.DEFAULT_KEYBOARD_WRITE_MODE)
+        VidentePreferences.setCursorAnnounce(this, VidentePreferences.DEFAULT_CURSOR_ANNOUNCE)
         Toast.makeText(this, R.string.settings_reset_done, Toast.LENGTH_SHORT).show()
     }
 
