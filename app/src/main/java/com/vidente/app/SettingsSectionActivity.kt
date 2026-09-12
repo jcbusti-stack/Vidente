@@ -14,6 +14,8 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.SeekBar
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
@@ -52,32 +54,14 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     private var textPitchValue: TextView? = null
     private var spinnerLanguage: Spinner? = null
     private var spinnerVoice: Spinner? = null
-    private var spinnerAudioOutput: Spinner? = null
-    private var spinnerScrollFeedback: Spinner? = null
-    private var spinnerTypingEcho: Spinner? = null
-    private var spinnerKeyboardWriteMode: Spinner? = null
+    private var radioGroupAudioOutput: RadioGroup? = null
+    private var radioGroupScrollFeedback: RadioGroup? = null
+    private var radioGroupTypingEcho: RadioGroup? = null
+    private var radioGroupKeyboardWriteMode: RadioGroup? = null
     private var switchCursorAnnounce: Switch? = null
 
-    private val audioOutputValues = listOf(
-        VidentePreferences.AUDIO_OUTPUT_MEDIA,
-        VidentePreferences.AUDIO_OUTPUT_ACCESSIBILITY
-    )
-    private val scrollFeedbackValues = listOf(
-        VidentePreferences.SCROLL_FEEDBACK_TONE,
-        VidentePreferences.SCROLL_FEEDBACK_VOICE
-    )
-    private val typingEchoValues = listOf(
-        VidentePreferences.TYPING_ECHO_CHARS_WORDS,
-        VidentePreferences.TYPING_ECHO_CHARS,
-        VidentePreferences.TYPING_ECHO_WORDS,
-        VidentePreferences.TYPING_ECHO_NONE
-    )
     private val languageValues = listOf(
         VidentePreferences.APP_LANGUAGE_SYSTEM, "es", "en", "fr", "de", "pt", "it"
-    )
-    private val keyboardWriteModeValues = listOf(
-        VidentePreferences.WRITE_MODE_DOUBLE_TAP,
-        VidentePreferences.WRITE_MODE_SLIDE_RELEASE
     )
 
     private var currentRate = VidentePreferences.DEFAULT_RATE
@@ -123,7 +107,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         textPitchValue = findViewById(R.id.textPitchValue)
         spinnerLanguage = findViewById(R.id.spinnerLanguage)
         spinnerVoice = findViewById(R.id.spinnerVoice)
-        spinnerAudioOutput = findViewById(R.id.spinnerAudioOutput)
+        radioGroupAudioOutput = findViewById(R.id.radioGroupAudioOutput)
 
         currentRate = VidentePreferences.getRate(this)
         currentPitch = VidentePreferences.getPitch(this)
@@ -200,20 +184,18 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     }
 
     private fun setUpAudioOutputSpinner() {
-        val spinner = spinnerAudioOutput ?: return
-        val labels = listOf(
-            getString(R.string.settings_audio_output_media),
-            getString(R.string.settings_audio_output_accessibility)
+        val group = radioGroupAudioOutput ?: return
+        val idsByValue = mapOf(
+            VidentePreferences.AUDIO_OUTPUT_MEDIA to R.id.radioAudioOutputMedia,
+            VidentePreferences.AUDIO_OUTPUT_ACCESSIBILITY to R.id.radioAudioOutputAccessibility
         )
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-        spinner.setSelection(audioOutputValues.indexOf(VidentePreferences.getAudioOutput(this)).coerceAtLeast(0))
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                VidentePreferences.setAudioOutput(this@SettingsSectionActivity, audioOutputValues[position])
+        val valuesById = idsByValue.entries.associate { (value, id) -> id to value }
+        group.check(idsByValue[VidentePreferences.getAudioOutput(this)] ?: R.id.radioAudioOutputMedia)
+        group.setOnCheckedChangeListener { _, checkedId ->
+            valuesById[checkedId]?.let {
+                VidentePreferences.setAudioOutput(this@SettingsSectionActivity, it)
                 applyAudioOutputToTts()
             }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
         }
     }
 
@@ -310,22 +292,20 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     // ---- Escritura y teclado ----
 
     private fun setUpTypingSection() {
-        spinnerTypingEcho = findViewById(R.id.spinnerTypingEcho)
-        val spinner = spinnerTypingEcho ?: return
-        val labels = listOf(
-            getString(R.string.settings_typing_echo_chars_words),
-            getString(R.string.settings_typing_echo_chars),
-            getString(R.string.settings_typing_echo_words),
-            getString(R.string.settings_typing_echo_none)
+        radioGroupTypingEcho = findViewById(R.id.radioGroupTypingEcho)
+        val group = radioGroupTypingEcho ?: return
+        val idsByValue = mapOf(
+            VidentePreferences.TYPING_ECHO_CHARS_WORDS to R.id.radioTypingEchoCharsWords,
+            VidentePreferences.TYPING_ECHO_CHARS to R.id.radioTypingEchoChars,
+            VidentePreferences.TYPING_ECHO_WORDS to R.id.radioTypingEchoWords,
+            VidentePreferences.TYPING_ECHO_NONE to R.id.radioTypingEchoNone
         )
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-        spinner.setSelection(typingEchoValues.indexOf(VidentePreferences.getTypingEcho(this)).coerceAtLeast(0))
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                VidentePreferences.setTypingEcho(this@SettingsSectionActivity, typingEchoValues[position])
+        val valuesById = idsByValue.entries.associate { (value, id) -> id to value }
+        group.check(idsByValue[VidentePreferences.getTypingEcho(this)] ?: R.id.radioTypingEchoCharsWords)
+        group.setOnCheckedChangeListener { _, checkedId ->
+            valuesById[checkedId]?.let {
+                VidentePreferences.setTypingEcho(this@SettingsSectionActivity, it)
             }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
         }
 
         setUpKeyboardWriteModeSpinner()
@@ -333,24 +313,18 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     }
 
     private fun setUpKeyboardWriteModeSpinner() {
-        spinnerKeyboardWriteMode = findViewById(R.id.spinnerKeyboardWriteMode)
-        val spinner = spinnerKeyboardWriteMode ?: return
-        val labels = listOf(
-            getString(R.string.settings_keyboard_write_mode_double_tap),
-            getString(R.string.settings_keyboard_write_mode_slide_release)
+        radioGroupKeyboardWriteMode = findViewById(R.id.radioGroupKeyboardWriteMode)
+        val group = radioGroupKeyboardWriteMode ?: return
+        val idsByValue = mapOf(
+            VidentePreferences.WRITE_MODE_DOUBLE_TAP to R.id.radioKeyboardWriteModeDoubleTap,
+            VidentePreferences.WRITE_MODE_SLIDE_RELEASE to R.id.radioKeyboardWriteModeSlideRelease
         )
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-        spinner.setSelection(
-            keyboardWriteModeValues.indexOf(VidentePreferences.getKeyboardWriteMode(this)).coerceAtLeast(0)
-        )
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                VidentePreferences.setKeyboardWriteMode(
-                    this@SettingsSectionActivity, keyboardWriteModeValues[position]
-                )
+        val valuesById = idsByValue.entries.associate { (value, id) -> id to value }
+        group.check(idsByValue[VidentePreferences.getKeyboardWriteMode(this)] ?: R.id.radioKeyboardWriteModeDoubleTap)
+        group.setOnCheckedChangeListener { _, checkedId ->
+            valuesById[checkedId]?.let {
+                VidentePreferences.setKeyboardWriteMode(this@SettingsSectionActivity, it)
             }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
         }
     }
 
@@ -369,20 +343,18 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     // ---- Sonidos y vibración ----
 
     private fun setUpSoundSection() {
-        spinnerScrollFeedback = findViewById(R.id.spinnerScrollFeedback)
-        val spinner = spinnerScrollFeedback ?: return
-        val labels = listOf(
-            getString(R.string.settings_scroll_feedback_tone),
-            getString(R.string.settings_scroll_feedback_voice)
+        radioGroupScrollFeedback = findViewById(R.id.radioGroupScrollFeedback)
+        val group = radioGroupScrollFeedback ?: return
+        val idsByValue = mapOf(
+            VidentePreferences.SCROLL_FEEDBACK_TONE to R.id.radioScrollFeedbackTone,
+            VidentePreferences.SCROLL_FEEDBACK_VOICE to R.id.radioScrollFeedbackVoice
         )
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-        spinner.setSelection(scrollFeedbackValues.indexOf(VidentePreferences.getScrollFeedback(this)).coerceAtLeast(0))
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                VidentePreferences.setScrollFeedback(this@SettingsSectionActivity, scrollFeedbackValues[position])
+        val valuesById = idsByValue.entries.associate { (value, id) -> id to value }
+        group.check(idsByValue[VidentePreferences.getScrollFeedback(this)] ?: R.id.radioScrollFeedbackTone)
+        group.setOnCheckedChangeListener { _, checkedId ->
+            valuesById[checkedId]?.let {
+                VidentePreferences.setScrollFeedback(this@SettingsSectionActivity, it)
             }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
         }
     }
 

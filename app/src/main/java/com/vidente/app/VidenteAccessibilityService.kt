@@ -177,6 +177,13 @@ class VidenteAccessibilityService :
     // por defecto activado.
     private var cursorAnnounceEnabled = true
     private var lastCursorIndex = -1
+    // Identifica el campo al que corresponde lastCursorIndex (id de vista, o
+    // el propio texto leído si no tiene id), para no reiniciar la referencia
+    // cuando se vuelve a tocar el MISMO campo ya enfocado: la exploración
+    // táctil re-enfoca y re-anuncia el campo en cada toque, y si eso también
+    // reiniciara la referencia, el toque para reposicionar el cursor caería
+    // siempre en "primer movimiento tras enfocar" y nunca se anunciaría.
+    private var lastCursorFieldKey: String? = null
     // Tras un movimiento de P7 (recorrer por carácter/palabra/línea/párrafo,
     // que ya lee el fragmento y ya anuncia el borde) o al escribir/borrar (que
     // ya tiene su propio eco) llega un cambio de selección: se ignora hasta
@@ -445,6 +452,7 @@ class VidenteAccessibilityService :
         prevFocusedNodeAt = 0L
         // El cursor de la pantalla anterior no tiene nada que ver con la nueva.
         lastCursorIndex = -1
+        lastCursorFieldKey = null
     }
 
     /**
@@ -814,6 +822,7 @@ class VidenteAccessibilityService :
         val text = describeForSpeech(node)
         val editable = node.isEditable ||
             node.className?.toString()?.endsWith("EditText") == true
+        val fieldKey = node.viewIdResourceName ?: text
 
         // Copia del último elemento leído: ancla de respaldo para
         // "siguiente/anterior" cuando la app no acepta el foco de accesibilidad.
@@ -843,8 +852,14 @@ class VidenteAccessibilityService :
 
         lastSpoken = text
         lastSpokenAt = now
-        // Nuevo elemento enfocado: el índice de cursor de lo anterior no aplica.
-        lastCursorIndex = -1
+        // Nuevo elemento enfocado: el índice de cursor de lo anterior no
+        // aplica. Pero si es el mismo campo que ya estaba enfocado (un toque
+        // de exploración táctil que re-anuncia el mismo campo), se conserva:
+        // ver el comentario de lastCursorFieldKey.
+        if (fieldKey != lastCursorFieldKey) {
+            lastCursorFieldKey = fieldKey
+            lastCursorIndex = -1
+        }
         val toSpeak = if (boundary != null) "$boundary. $text" else text
         if (ttsReady) speak(toSpeak) else pendingText = toSpeak
 

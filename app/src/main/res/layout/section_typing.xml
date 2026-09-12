@@ -11,12 +11,38 @@
         android:text="@string/settings_typing_echo_label"
         android:textSize="16sp" />
 
-    <Spinner
-        android:id="@+id/spinnerTypingEcho"
+    <RadioGroup
+        android:id="@+id/radioGroupTypingEcho"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="24dp"
-        android:contentDescription="@string/settings_typing_echo_label" />
+        android:contentDescription="@string/settings_typing_echo_label"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioTypingEchoCharsWords"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_typing_echo_chars_words" />
+
+        <RadioButton
+            android:id="@+id/radioTypingEchoChars"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_typing_echo_chars" />
+
+        <RadioButton
+            android:id="@+id/radioTypingEchoWords"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_typing_echo_words" />
+
+        <RadioButton
+            android:id="@+id/radioTypingEchoNone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_typing_echo_none" />
+    </RadioGroup>
 
     <TextView
         android:layout_width="wrap_content"
@@ -25,12 +51,26 @@
         android:text="@string/settings_keyboard_write_mode_label"
         android:textSize="16sp" />
 
-    <Spinner
-        android:id="@+id/spinnerKeyboardWriteMode"
+    <RadioGroup
+        android:id="@+id/radioGroupKeyboardWriteMode"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="24dp"
-        android:contentDescription="@string/settings_keyboard_write_mode_label" />
+        android:contentDescription="@string/settings_keyboard_write_mode_label"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioKeyboardWriteModeDoubleTap"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_keyboard_write_mode_double_tap" />
+
+        <RadioButton
+            android:id="@+id/radioKeyboardWriteModeSlideRelease"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_keyboard_write_mode_slide_release" />
+    </RadioGroup>
 
     <Switch
         android:id="@+id/switchCursorAnnounce"

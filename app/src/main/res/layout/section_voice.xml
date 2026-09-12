@@ -81,12 +81,26 @@
         android:text="@string/settings_audio_output_label"
         android:textSize="16sp" />
 
-    <Spinner
-        android:id="@+id/spinnerAudioOutput"
+    <RadioGroup
+        android:id="@+id/radioGroupAudioOutput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:contentDescription="@string/settings_audio_output_label" />
+        android:contentDescription="@string/settings_audio_output_label"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioAudioOutputMedia"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_audio_output_media" />
+
+        <RadioButton
+            android:id="@+id/radioAudioOutputAccessibility"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_audio_output_accessibility" />
+    </RadioGroup>
 
     <Button
         android:id="@+id/buttonPreview"
