@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Vidente reads aloud the item that has focus on screen.</string>
+    <string name="main_instructions">Turn on Vidente in Accessibility settings so it reads focused items aloud.</string>
+    <string name="open_settings">Open accessibility settings</string>
+    <string name="open_settings_screen">Vidente settings</string>
+    <string name="settings_mic_button">Turn on microphone</string>
+
+    <string name="settings_title">Vidente settings</string>
+    <string name="settings_section_voice">Voice and reading</string>
+    <string name="settings_section_typing">Typing and keyboard</string>
+    <string name="settings_section_sound">Sounds and vibration</string>
+    <string name="settings_section_tutorial">Welcome tutorial</string>
+    <string name="settings_section_conversational">Conversational assistant</string>
+    <string name="settings_section_general">General settings</string>
+    <string name="settings_back">Back to Settings</string>
+    <string name="settings_language_label">Language</string>
+    <string name="settings_language_system">Follow the phone\'s language</string>
+
+    <!-- ===== Text Vidente speaks aloud ===== -->
+    <string name="spoken_role_button">button</string>
+    <string name="spoken_role_switch">switch</string>
+    <string name="spoken_role_checkbox">checkbox</string>
+    <string name="spoken_role_radio">radio button</string>
+    <string name="spoken_role_slider">slider</string>
+    <string name="spoken_role_editbox">edit box</string>
+    <string name="spoken_role_message_editbox">message, edit box</string>
+    <string name="spoken_role_text">text</string>
+
+    <string name="spoken_state_on">on</string>
+    <string name="spoken_state_off">off</string>
+    <string name="spoken_state_selected">selected</string>
+    <string name="spoken_state_disabled">not available</string>
+
+    <string name="spoken_screen_start">Start of screen</string>
+    <string name="spoken_screen_end">End of screen</string>
+    <string name="spoken_list_start">Start of list</string>
+    <string name="spoken_list_end">End of list</string>
+    <string name="spoken_text_start">Start of text</string>
+    <string name="spoken_text_end">End of text</string>
+    <string name="spoken_no_text_to_traverse">No text to move through here</string>
+    <string name="spoken_selected_text">%1$s, selected</string>
+    <string name="spoken_selected_count">%1$d characters selected</string>
+
+    <string name="spoken_reading_paused">Paused</string>
+    <string name="spoken_reading_finished">End of reading</string>
+
+    <string name="spoken_keyboard_shown">Keyboard shown</string>
+    <string name="spoken_keyboard_hidden">Keyboard hidden</string>
+
+    <string name="spoken_deleted">%1$s, deleted</string>
+    <string name="spoken_space">space</string>
+    <string name="spoken_chars_count">%1$d characters</string>
+
+    <string name="spoken_scroll_item">item %1$d of %2$d</string>
+    <string name="spoken_scroll_percent">%1$d percent</string>
+
+    <string name="spoken_no_type_on_screen">No %1$s on screen</string>
+
+    <string name="spoken_home">Home</string>
+    <string name="spoken_back">Back</string>
+    <string name="spoken_recents">Recents</string>
+
+    <string name="nav_mode_element">element</string>
+    <string name="nav_mode_character">character</string>
+    <string name="nav_mode_word">word</string>
+    <string name="nav_mode_line">line</string>
+    <string name="nav_mode_paragraph">paragraph</string>
+    <string name="nav_mode_heading">headings</string>
+    <string name="nav_mode_link">links</string>
+    <string name="nav_mode_control">controls</string>
+    <string name="nav_mode_field">fields</string>
+
+    <!-- ===== Welcome tutorial ===== -->
+    <string name="tutorial_intro">Welcome to Vidente. We\'ll practise the gestures one by one. You can repeat this tutorial any time from Settings.</string>
+    <string name="tutorial_explore">First gesture: explore. Rest one finger on the screen and move it slowly. Vidente will read out whatever is under your finger, without activating anything. Try it now: touch anywhere on the screen.</string>
+    <string name="tutorial_explore_ok">Well done. That\'s exploring.</string>
+    <string name="tutorial_double_tap">Second gesture: activate. Double tap quickly anywhere on the screen. You don\'t have to tap right on the item: it activates the last one Vidente read. Try it now: two quick taps.</string>
+    <string name="tutorial_double_tap_ok">Well done. That\'s activating.</string>
+    <string name="tutorial_navigate">Third gesture: moving around the screen, item by item. Swipe one finger right to go to the next item, and left to go back to the previous one. Vidente reads each item as you reach it. Let\'s try both.</string>
+    <string name="tutorial_navigate_first">Start by swiping right to go to the next item.</string>
+    <string name="tutorial_system">Fourth and last gesture: the system bar. Swipe up to go Home. Swipe down then left, in one movement, for Back. And down then right for Recents. Let\'s try all three.</string>
+    <string name="tutorial_system_first">Start by swiping up for Home.</string>
+    <string name="tutorial_reading">Fifth gesture: continuous reading. Swipe down and back up without lifting your finger, and Vidente will start reading from where you are to the end. A tap on the screen pauses it; the same down-and-up gesture resumes it. And swiping up and back down repeats the last phrase. Let\'s try those two.</string>
+    <string name="tutorial_reading_first">Start by swiping down and back up without lifting your finger.</string>
+    <string name="tutorial_modes">Sixth and last gesture: changing mode. Swiping straight down cycles through the modes: element, character, word, line, paragraph, headings, links, controls and fields. Vidente says the mode as it changes. Then swiping right or left moves you according to the chosen mode.</string>
+    <string name="tutorial_modes_first">Try it now: swipe straight down.</string>
+    <string name="tutorial_done">The tutorial is finished. You can repeat it any time from Settings, with the Repeat tutorial button.</string>
+    <string name="tutorial_nav_ok_next">Good, next item.</string>
+    <string name="tutorial_nav_ok_prev">Good, previous item.</string>
+    <string name="tutorial_nav_next_right">Now swipe right to go to the next item.</string>
+    <string name="tutorial_nav_next_left">Now swipe left to go back to the previous one.</string>
+    <string name="tutorial_sys_ok_home">Good, that\'s Home.</string>
+    <string name="tutorial_sys_ok_back">Good, that\'s Back.</string>
+    <string name="tutorial_sys_ok_recents">Good, that\'s Recents.</string>
+    <string name="tutorial_sys_next_home">Now swipe up for Home.</string>
+    <string name="tutorial_sys_next_back">Now swipe down then left for Back.</string>
+    <string name="tutorial_sys_next_recents">Now swipe down then right for Recents.</string>
+    <string name="tutorial_reading_ok_start">Good, that\'s how you start continuous reading.</string>
+    <string name="tutorial_reading_ok_repeat">Good, that\'s how you repeat the last phrase.</string>
+    <string name="tutorial_reading_next_start">Now swipe down and back up without lifting your finger, to start continuous reading.</string>
+    <string name="tutorial_reading_next_repeat">Now swipe up and back down without lifting your finger, to repeat the last phrase.</string>
+    <string name="tutorial_modes_ok">Good, that\'s how you change mode.</string>
+
+    <string name="settings_rate_label">Speech rate</string>
+    <string name="settings_rate_value">Rate: %1$.2fx</string>
+    <string name="settings_pitch_label">Speech pitch</string>
+    <string name="settings_pitch_value">Pitch: %1$.2fx</string>
+    <string name="settings_voice_label">System voice</string>
+    <string name="settings_voice_auto">Recommended voice (automatic)</string>
+    <string name="settings_preview_button">Test voice</string>
+    <string name="settings_reset_button">Reset to defaults</string>
+    <string name="settings_reset_done">Defaults restored</string>
+    <string name="settings_preview_text">This is how Vidente will sound when reading items on screen.</string>
+    <string name="settings_replay_tutorial">Repeat tutorial</string>
+    <string name="settings_replay_tutorial_started">The tutorial is about to start. Listen to Vidente\'s instructions.</string>
+    <string name="settings_audio_output_label">Voice output</string>
+    <string name="settings_audio_output_media">Media (recommended, plays through Bluetooth)</string>
+    <string name="settings_audio_output_accessibility">Accessibility (separate volume, may not use Bluetooth)</string>
+    <string name="settings_scroll_feedback_label">Position feedback when scrolling</string>
+    <string name="settings_scroll_feedback_tone">Sound (low to high tone)</string>
+    <string name="settings_scroll_feedback_voice">Voice (percentage)</string>
+    <string name="settings_typing_echo_label">Typing echo</string>
+    <string name="settings_typing_echo_chars_words">Characters and words</string>
+    <string name="settings_typing_echo_chars">Characters only</string>
+    <string name="settings_typing_echo_words">Words only</string>
+    <string name="settings_typing_echo_none">Off</string>
+    <string name="settings_keyboard_write_mode_label">Keyboard writing mode</string>
+    <string name="settings_keyboard_write_mode_double_tap">Double tap (current)</string>
+    <string name="settings_keyboard_write_mode_slide_release">Slide and release</string>
+    <string name="settings_cursor_announce_label">Cursor position announcement</string>
+    <string name="settings_cursor_announce_on">On</string>
+    <string name="settings_cursor_announce_off">Off</string>
+
+    <string name="settings_backend_url_label">Vidente server address (for conversational mode)</string>
+    <string name="settings_backend_url_hint">e.g. https://my-vidente.onrender.com</string>
+    <string name="settings_backend_key_label">Server access key (optional)</string>
+    <string name="settings_backend_key_hint">Only if your server requires it</string>
+    <string name="settings_backend_save">Save</string>
+    <string name="settings_backend_saved">Settings saved</string>
+
+    <string name="request_mic_permission">Turn on microphone (conversational mode)</string>
+    <string name="mic_permission_granted">Microphone permission granted</string>
+    <string name="mic_permission_denied">Microphone permission denied. Conversational mode won\'t work without it.</string>
+
+    <string name="conversational_floating_button">Ask</string>
+    <string name="conversational_floating_button_description">Ask Vidente about the current screen</string>
+    <string name="conversational_need_mic_permission">I need microphone permission. Open the Vidente app to grant it.</string>
+    <string name="conversational_listening">I\'m listening. Ask about the screen.</string>
+    <string name="conversational_no_question_heard">I didn\'t catch the question, please try again.</string>
+</resources>

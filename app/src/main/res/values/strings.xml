@@ -1,0 +1,156 @@
+<resources>
+    <string name="app_name">Vidente</string>
+    <string name="accessibility_service_description">Vidente lee en voz alta el elemento que tiene el foco en pantalla.</string>
+    <string name="main_instructions">Activa Vidente en Ajustes de accesibilidad para que lea en voz alta los elementos enfocados.</string>
+    <string name="open_settings">Abrir ajustes de accesibilidad</string>
+    <string name="open_settings_screen">Ajustes de Vidente</string>
+    <string name="settings_mic_button">Activar micrófono</string>
+
+    <string name="settings_title">Ajustes de Vidente</string>
+    <string name="settings_section_voice">Voz y lectura</string>
+    <string name="settings_section_typing">Escritura y teclado</string>
+    <string name="settings_section_sound">Sonidos y vibración</string>
+    <string name="settings_section_tutorial">Tutorial de bienvenida</string>
+    <string name="settings_section_conversational">Asistente conversacional</string>
+    <string name="settings_section_general">Ajustes generales</string>
+    <string name="settings_back">Volver a Ajustes</string>
+    <string name="settings_language_label">Idioma</string>
+    <string name="settings_language_system">Seguir el idioma del teléfono</string>
+    <string name="language_name_es">Español</string>
+    <string name="language_name_en">English</string>
+    <string name="language_name_fr">Français</string>
+    <string name="language_name_de">Deutsch</string>
+    <string name="language_name_pt">Português</string>
+    <string name="language_name_it">Italiano</string>
+
+    <!-- ===== Texto que Vidente dice en voz alta ===== -->
+    <string name="spoken_role_button">botón</string>
+    <string name="spoken_role_switch">interruptor</string>
+    <string name="spoken_role_checkbox">casilla</string>
+    <string name="spoken_role_radio">opción</string>
+    <string name="spoken_role_slider">control deslizante</string>
+    <string name="spoken_role_editbox">cuadro de edición</string>
+    <string name="spoken_role_message_editbox">mensaje, cuadro de edición</string>
+    <string name="spoken_role_text">texto</string>
+
+    <string name="spoken_state_on">activado</string>
+    <string name="spoken_state_off">desactivado</string>
+    <string name="spoken_state_selected">seleccionado</string>
+    <string name="spoken_state_disabled">no disponible</string>
+
+    <string name="spoken_screen_start">Principio de la pantalla</string>
+    <string name="spoken_screen_end">Final de la pantalla</string>
+    <string name="spoken_list_start">Principio de la lista</string>
+    <string name="spoken_list_end">Final de la lista</string>
+    <string name="spoken_text_start">Principio del texto</string>
+    <string name="spoken_text_end">Final del texto</string>
+    <string name="spoken_no_text_to_traverse">Aquí no hay texto para recorrer</string>
+    <string name="spoken_selected_text">%1$s, seleccionado</string>
+    <string name="spoken_selected_count">%1$d caracteres seleccionados</string>
+
+    <string name="spoken_reading_paused">Pausa</string>
+    <string name="spoken_reading_finished">Fin de la lectura</string>
+
+    <string name="spoken_keyboard_shown">Teclado en pantalla</string>
+    <string name="spoken_keyboard_hidden">Teclado oculto</string>
+
+    <string name="spoken_deleted">%1$s, borrado</string>
+    <string name="spoken_space">espacio</string>
+    <string name="spoken_chars_count">%1$d caracteres</string>
+
+    <string name="spoken_scroll_item">elemento %1$d de %2$d</string>
+    <string name="spoken_scroll_percent">%1$d por ciento</string>
+
+    <string name="spoken_no_type_on_screen">No hay %1$s en la pantalla</string>
+
+    <string name="spoken_home">Inicio</string>
+    <string name="spoken_back">Atrás</string>
+    <string name="spoken_recents">Recientes</string>
+
+    <string name="nav_mode_element">elemento</string>
+    <string name="nav_mode_character">carácter</string>
+    <string name="nav_mode_word">palabra</string>
+    <string name="nav_mode_line">línea</string>
+    <string name="nav_mode_paragraph">párrafo</string>
+    <string name="nav_mode_heading">encabezados</string>
+    <string name="nav_mode_link">enlaces</string>
+    <string name="nav_mode_control">controles</string>
+    <string name="nav_mode_field">campos</string>
+
+    <!-- ===== Tutorial de bienvenida ===== -->
+    <string name="tutorial_intro">Bienvenido a Vidente. Vamos a practicar los gestos, uno a uno. Puedes repetir este tutorial cuando quieras desde Ajustes.</string>
+    <string name="tutorial_explore">Primer gesto: explorar. Apoya un dedo en la pantalla y muévelo despacio. Vidente te irá leyendo lo que hay bajo tu dedo, sin activar nada. Pruébalo ahora: toca cualquier parte de la pantalla.</string>
+    <string name="tutorial_explore_ok">Muy bien. Eso es explorar.</string>
+    <string name="tutorial_double_tap">Segundo gesto: activar. Da dos toques rápidos en cualquier parte de la pantalla. No hace falta tocar justo encima del elemento: se activa el último que Vidente leyó. Pruébalo ahora: dos toques rápidos.</string>
+    <string name="tutorial_double_tap_ok">Muy bien. Eso es activar.</string>
+    <string name="tutorial_navigate">Tercer gesto: moverte por la pantalla, elemento por elemento. Desliza un dedo a la derecha para ir al elemento siguiente, y a la izquierda para volver al anterior. Vidente te leerá cada elemento al llegar. Vamos a probar los dos.</string>
+    <string name="tutorial_navigate_first">Empieza deslizando a la derecha para ir al siguiente.</string>
+    <string name="tutorial_system">Cuarto y último gesto: la barra del sistema. Desliza hacia arriba para ir a Inicio. Desliza hacia abajo y luego a la izquierda, en un solo movimiento, para Atrás. Y hacia abajo y luego a la derecha para Recientes. Vamos a probar los tres.</string>
+    <string name="tutorial_system_first">Empieza deslizando hacia arriba para Inicio.</string>
+    <string name="tutorial_reading">Quinto gesto: leer de corrido. Desliza hacia abajo y vuelve arriba sin levantar el dedo, y Vidente empezará a leer desde donde estás hasta el final. Un toque en la pantalla lo pausa; el mismo gesto de abajo y arriba lo reanuda. Y deslizando hacia arriba y volviendo abajo se repite la última frase. Vamos a probar esos dos.</string>
+    <string name="tutorial_reading_first">Empieza deslizando hacia abajo y volviendo arriba sin levantar el dedo.</string>
+    <string name="tutorial_modes">Sexto y último gesto: cambiar de modo. Deslizando hacia abajo, recto, se va cambiando entre modos: elemento, carácter, palabra, línea, párrafo, encabezados, enlaces, controles y campos. Vidente dice el modo al cambiar. Luego, deslizar a la derecha o a la izquierda te mueve según el modo elegido.</string>
+    <string name="tutorial_modes_first">Pruébalo ahora: desliza hacia abajo, recto.</string>
+    <string name="tutorial_done">El tutorial terminó. Puedes repetirlo cuando quieras desde Ajustes, con el botón Repetir tutorial.</string>
+    <string name="tutorial_nav_ok_next">Bien, elemento siguiente.</string>
+    <string name="tutorial_nav_ok_prev">Bien, elemento anterior.</string>
+    <string name="tutorial_nav_next_right">Ahora desliza a la derecha para ir al siguiente.</string>
+    <string name="tutorial_nav_next_left">Ahora desliza a la izquierda para volver al anterior.</string>
+    <string name="tutorial_sys_ok_home">Bien, eso es Inicio.</string>
+    <string name="tutorial_sys_ok_back">Bien, eso es Atrás.</string>
+    <string name="tutorial_sys_ok_recents">Bien, eso es Recientes.</string>
+    <string name="tutorial_sys_next_home">Ahora desliza hacia arriba para Inicio.</string>
+    <string name="tutorial_sys_next_back">Ahora desliza hacia abajo y luego a la izquierda para Atrás.</string>
+    <string name="tutorial_sys_next_recents">Ahora desliza hacia abajo y luego a la derecha para Recientes.</string>
+    <string name="tutorial_reading_ok_start">Bien, así se empieza a leer de corrido.</string>
+    <string name="tutorial_reading_ok_repeat">Bien, así se repite la última frase.</string>
+    <string name="tutorial_reading_next_start">Ahora desliza hacia abajo y vuelve arriba sin levantar el dedo, para empezar a leer de corrido.</string>
+    <string name="tutorial_reading_next_repeat">Ahora desliza hacia arriba y vuelve abajo sin levantar el dedo, para repetir la última frase.</string>
+    <string name="tutorial_modes_ok">Bien, así se cambia de modo.</string>
+    <string name="settings_rate_label">Velocidad de voz</string>
+    <string name="settings_rate_value">Velocidad: %1$.2fx</string>
+    <string name="settings_pitch_label">Tono de voz</string>
+    <string name="settings_pitch_value">Tono: %1$.2fx</string>
+    <string name="settings_voice_label">Voz del sistema</string>
+    <string name="settings_voice_auto">Voz recomendada (automática)</string>
+    <string name="settings_preview_button">Probar voz</string>
+    <string name="settings_reset_button">Restablecer valores</string>
+    <string name="settings_reset_done">Valores restablecidos</string>
+    <string name="settings_preview_text">Así sonará Vidente al leer los elementos en pantalla.</string>
+    <string name="settings_replay_tutorial">Repetir tutorial</string>
+    <string name="settings_replay_tutorial_started">El tutorial va a empezar. Escucha las instrucciones de Vidente.</string>
+    <string name="settings_audio_output_label">Salida de voz</string>
+    <string name="settings_audio_output_media">Multimedia (recomendado, sale por Bluetooth)</string>
+    <string name="settings_audio_output_accessibility">Accesibilidad (volumen aparte, puede no usar Bluetooth)</string>
+    <string name="settings_scroll_feedback_label">Aviso de posición al desplazar</string>
+    <string name="settings_scroll_feedback_tone">Sonido (tono grave a agudo)</string>
+    <string name="settings_scroll_feedback_voice">Voz (porcentaje)</string>
+    <string name="settings_typing_echo_label">Eco de escritura al teclear</string>
+    <string name="settings_typing_echo_chars_words">Caracteres y palabras</string>
+    <string name="settings_typing_echo_chars">Solo caracteres</string>
+    <string name="settings_typing_echo_words">Solo palabras</string>
+    <string name="settings_typing_echo_none">Desactivado</string>
+    <string name="settings_keyboard_write_mode_label">Modo de escritura en teclado</string>
+    <string name="settings_keyboard_write_mode_double_tap">Doble toque (el actual)</string>
+    <string name="settings_keyboard_write_mode_slide_release">Deslizar y soltar</string>
+    <string name="settings_cursor_announce_label">Anuncio de posición del cursor</string>
+    <string name="settings_cursor_announce_on">Activado</string>
+    <string name="settings_cursor_announce_off">Desactivado</string>
+
+    <string name="settings_backend_url_label">Dirección del servidor de Vidente (para el modo conversacional)</string>
+    <string name="settings_backend_url_hint">Ej: https://mi-vidente.onrender.com</string>
+    <string name="settings_backend_key_label">Clave de acceso al servidor (opcional)</string>
+    <string name="settings_backend_key_hint">Solo si tu servidor la pide</string>
+    <string name="settings_backend_save">Guardar</string>
+    <string name="settings_backend_saved">Configuración guardada</string>
+
+    <string name="request_mic_permission">Activar micrófono (modo conversacional)</string>
+    <string name="mic_permission_granted">Permiso de micrófono concedido</string>
+    <string name="mic_permission_denied">Permiso de micrófono denegado. El modo conversacional no funcionará sin él.</string>
+
+    <string name="conversational_floating_button">Preguntar</string>
+    <string name="conversational_floating_button_description">Preguntar a Vidente sobre la pantalla actual</string>
+    <string name="conversational_need_mic_permission">Necesito permiso de micrófono. Abre la app Vidente para concederlo.</string>
+    <string name="conversational_listening">Te escucho. Pregunta sobre la pantalla.</string>
+    <string name="conversational_no_question_heard">No entendí la pregunta, inténtalo de nuevo.</string>
+</resources>
