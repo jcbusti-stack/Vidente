@@ -340,8 +340,15 @@ class VidenteAccessibilityService :
         event ?: return
 
         // P8b: cualquier evento de un teclado indica que está en pantalla.
+        // Se excluyen los dos tipos agregados para el cursor y el deslizar-y-
+        // soltar: el propio teclado los dispara en cada toque de tecla, y si
+        // entraran acá reiniciarían sin parar el debounce de "apareció",
+        // dejando keyboardVisible en false mientras se escribe.
         val evtPkg = event.packageName?.toString()
-        if (tutorialStep == TutorialStep.NONE && evtPkg != null && evtPkg in imePackages) {
+        if (tutorialStep == TutorialStep.NONE && evtPkg != null && evtPkg in imePackages &&
+            event.eventType != AccessibilityEvent.TYPE_TOUCH_INTERACTION_END &&
+            event.eventType != AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED
+        ) {
             onKeyboardEventSeen()
         }
 
