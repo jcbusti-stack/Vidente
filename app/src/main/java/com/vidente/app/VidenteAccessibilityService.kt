@@ -1923,24 +1923,56 @@ class VidenteAccessibilityService :
         if (fresh && hovered != null) {
             val copy = try { AccessibilityNodeInfo.obtain(hovered) } catch (e: Exception) { null }
             if (copy != null) {
-                val t = nearestClickable(copy)
-                val ok = t?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
-                if (t != null && t != copy) t.recycle()
+                val ok = clickNodeOrNearestAncestor(copy)
                 copy.recycle()
                 if (ok) return true
             }
         }
 
-        val root = rootInActiveWindow ?: return false
-        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
-        root.recycle()
-        focused ?: return false
-
-        val target = nearestClickable(focused)
-        val done = target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
-        if (target != null && target != focused) target.recycle()
+        val focused = findAccessibilityFocusedNodeAcrossWindows() ?: return false
+        val done = clickNodeOrNearestAncestor(focused)
         focused.recycle()
         return done
+    }
+
+    /**
+     * Intenta ACTION_CLICK sobre el propio nodo primero: algunos nodos
+     * virtuales de teclado (deslizando rápido, la exploración a veces cae en
+     * un nodo así) responden al clic aunque no reporten isClickable=true, así
+     * que exigir eso de entrada los descartaba sin necesidad. Si el clic
+     * directo no hace nada, recién ahí se busca el ancestro clickeable.
+     */
+    private fun clickNodeOrNearestAncestor(node: AccessibilityNodeInfo): Boolean {
+        if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+        val target = nearestClickable(node) ?: return false
+        val done = target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        if (target != node) target.recycle()
+        return done
+    }
+
+    /**
+     * Busca el nodo con foco de accesibilidad en la ventana activa y, si no
+     * está ahí, en cualquier otra ventana interactiva (p. ej. el teclado en
+     * pantalla, que es una ventana propia). rootInActiveWindow por sí solo no
+     * incluye el teclado: por eso "deslizar y soltar" nunca encontraba la
+     * tecla al soltar el dedo (confirmado con un build de diagnóstico: el
+     * camino de respaldo decía "sin nodo con foco de accesibilidad" porque
+     * buscaba solo en la ventana de la app, no en la del teclado).
+     */
+    @Suppress("DEPRECATION")
+    private fun findAccessibilityFocusedNodeAcrossWindows(): AccessibilityNodeInfo? {
+        rootInActiveWindow?.let { root ->
+            val f = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+            root.recycle()
+            if (f != null) return f
+        }
+        for (window in windows) {
+            val root = window.root ?: continue
+            val f = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+            root.recycle()
+            if (f != null) return f
+        }
+        return null
     }
 
     /**
@@ -1966,73 +1998,7 @@ class VidenteAccessibilityService :
     private fun handleTouchInteractionEnd() {
         if (keyboardWriteMode != VidentePreferences.WRITE_MODE_SLIDE_RELEASE) return
         if (!keyboardVisible) return
-        activateFocusedElementDiagnostic()
-    }
-
-    /**
-     * TEMPORAL, solo para diagnóstico del bug "deslizar y soltar no escribe".
-     * Copia exacta de la lógica de activateFocusedElement(), pero anunciando
-     * en qué paso se queda en vez de fallar en silencio. Quitar esta función
-     * y volver a llamar a activateFocusedElement() directo en cuanto se
-     * confirme la causa real.
-     */
-    @Suppress("DEPRECATION")
-    private fun activateFocusedElementDiagnostic() {
-        val nowMs = SystemClock.uptimeMillis()
-
-        val fromOwnDoubleTap = nowMs - lastFocusedNodeAt < DOUBLE_TAP_OWN_HOVER_MS &&
-            prevFocusedNode != null &&
-            lastFocusedNodeAt - prevFocusedNodeAt > DOUBLE_TAP_OWN_HOVER_MS
-        val hovered = if (fromOwnDoubleTap) prevFocusedNode else lastFocusedNode
-        if (hovered == null) {
-            speak("diagnóstico, sin nodo guardado")
-            return
-        }
-        val hoverAge = nowMs - lastHoverAt
-        val refreshed = try { hovered.refresh() } catch (e: Exception) { false }
-        val fresh = hoverAge < HOVER_OWNS_FOCUS_MS && refreshed
-
-        if (fresh) {
-            val copy = try { AccessibilityNodeInfo.obtain(hovered) } catch (e: Exception) { null }
-            if (copy == null) {
-                speak("diagnóstico, no se pudo copiar el nodo fresco")
-                return
-            }
-            val t = nearestClickable(copy)
-            if (t == null) {
-                speak("diagnóstico, nodo fresco sin ancestro clickeable")
-                copy.recycle()
-                return
-            }
-            val ok = t.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            if (t != copy) t.recycle()
-            copy.recycle()
-            speak(if (ok) "diagnóstico, clic OK por camino fresco" else "diagnóstico, clic falló por camino fresco")
-            return
-        }
-
-        speak("diagnóstico, camino fresco no válido, refrescó $refreshed, edad $hoverAge milisegundos")
-        val root = rootInActiveWindow
-        if (root == null) {
-            speak("diagnóstico, sin ventana activa")
-            return
-        }
-        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
-        root.recycle()
-        if (focused == null) {
-            speak("diagnóstico, sin nodo con foco de accesibilidad")
-            return
-        }
-        val target = nearestClickable(focused)
-        if (target == null) {
-            speak("diagnóstico, foco de accesibilidad sin ancestro clickeable")
-            focused.recycle()
-            return
-        }
-        val done = target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        if (target != focused) target.recycle()
-        focused.recycle()
-        speak(if (done) "diagnóstico, clic OK por camino de respaldo" else "diagnóstico, clic falló por camino de respaldo")
+        activateFocusedElement()
     }
 
     private fun nearestClickable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
