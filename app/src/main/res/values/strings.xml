@@ -6,6 +6,23 @@
     <string name="open_settings_screen">Ajustes de Vidente</string>
     <string name="settings_mic_button">Activar micrófono</string>
 
+    <!-- ===== Asistente de configuración (primera pantalla al abrir la app) ===== -->
+    <string name="wizard_title">Asistente de configuración</string>
+    <string name="wizard_intro">Para que Vidente funcione bien, revisa estos pasos uno por uno. Cada botón lleva directo a la pantalla que hace falta.</string>
+    <string name="wizard_status_done">hecho</string>
+    <string name="wizard_status_pending">pendiente</string>
+    <string name="wizard_status_unknown">revisar</string>
+    <string name="wizard_step_battery">Ignorar optimización de batería, %1$s</string>
+    <string name="wizard_step_battery_hint">Necesario para que Vidente no se quede sin avisar mientras el teléfono está en reposo.</string>
+    <string name="wizard_step_mic">Permiso de micrófono, %1$s</string>
+    <string name="wizard_step_mic_hint">Hace falta solo para el asistente conversacional; el resto de Vidente funciona sin esto.</string>
+    <string name="wizard_step_autostart">Abrir inicio automático en segundo plano (Xiaomi), %1$s</string>
+    <string name="wizard_step_autostart_hint">Xiaomi no permite comprobar este paso por código: actívalo vos mismo en esa pantalla y volvé acá.</string>
+    <string name="wizard_step_accessibility">Activar el servicio de Vidente, %1$s</string>
+    <string name="wizard_step_accessibility_hint">Último paso: sin esto, Vidente no puede leer la pantalla.</string>
+    <string name="wizard_open_app_settings">Otras opciones de Vidente</string>
+    <string name="wizard_reopen_button">Volver a ver el asistente de configuración</string>
+
     <string name="settings_title">Ajustes de Vidente</string>
     <string name="settings_section_voice">Voz y lectura</string>
     <string name="settings_section_typing">Escritura y teclado</string>

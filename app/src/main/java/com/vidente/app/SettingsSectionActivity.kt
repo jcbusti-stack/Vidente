@@ -2,6 +2,7 @@ package com.vidente.app
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.os.Bundle
@@ -399,6 +400,9 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
 
     private fun setUpGeneralSection() {
         findViewById<Button>(R.id.buttonReset).setOnClickListener { resetToDefaults() }
+        findViewById<Button>(R.id.buttonReopenWizard).setOnClickListener {
+            startActivity(Intent(this, SetupWizardActivity::class.java))
+        }
     }
 
     private fun resetToDefaults() {

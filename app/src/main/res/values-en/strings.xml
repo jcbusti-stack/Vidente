@@ -6,6 +6,23 @@
     <string name="open_settings_screen">Vidente settings</string>
     <string name="settings_mic_button">Turn on microphone</string>
 
+    <!-- ===== Setup wizard (first screen when opening the app) ===== -->
+    <string name="wizard_title">Setup wizard</string>
+    <string name="wizard_intro">For Vidente to work well, go through these steps one by one. Each button opens the screen you need directly.</string>
+    <string name="wizard_status_done">done</string>
+    <string name="wizard_status_pending">pending</string>
+    <string name="wizard_status_unknown">check</string>
+    <string name="wizard_step_battery">Ignore battery optimization, %1$s</string>
+    <string name="wizard_step_battery_hint">Needed so Vidente doesn\'t go quiet while the phone is idle.</string>
+    <string name="wizard_step_mic">Microphone permission, %1$s</string>
+    <string name="wizard_step_mic_hint">Only needed for the conversational assistant; the rest of Vidente works without this.</string>
+    <string name="wizard_step_autostart">Open background autostart (Xiaomi), %1$s</string>
+    <string name="wizard_step_autostart_hint">Xiaomi doesn\'t let this be checked by code: turn it on yourself on that screen and come back here.</string>
+    <string name="wizard_step_accessibility">Turn on the Vidente service, %1$s</string>
+    <string name="wizard_step_accessibility_hint">Last step: without this, Vidente can\'t read the screen.</string>
+    <string name="wizard_open_app_settings">Other Vidente options</string>
+    <string name="wizard_reopen_button">See the setup wizard again</string>
+
     <string name="settings_title">Vidente settings</string>
     <string name="settings_section_voice">Voice and reading</string>
     <string name="settings_section_typing">Typing and keyboard</string>

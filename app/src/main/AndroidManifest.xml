@@ -11,6 +11,9 @@
          Se distribuye por APK, no por Play Store, así que no aplica la
          política de declaración de Google Play. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- Asistente de configuración: pedir que se ignore la optimización de
+         batería, causa confirmada de fallos intermitentes en segundo plano. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <queries>
         <intent>
@@ -32,6 +35,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".SetupWizardActivity"
+            android:exported="false"
+            android:label="@string/wizard_title" />
 
         <!-- exported: lo abre la app de Ajustes del sistema desde la pantalla
              de accesibilidad de Vidente (android:settingsActivity). -->
