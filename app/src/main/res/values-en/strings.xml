@@ -26,6 +26,7 @@
 
     <string name="settings_title">Vidente settings</string>
     <string name="settings_section_voice">Voice and reading</string>
+    <string name="settings_section_voice_secondary">Secondary voice (advanced)</string>
     <string name="settings_section_typing">Typing and keyboard</string>
     <string name="settings_section_sound">Sounds and vibration</string>
     <string name="settings_section_tutorial">Welcome tutorial</string>
@@ -125,9 +126,14 @@
     <string name="settings_rate_value">Rate: %1$.2fx</string>
     <string name="settings_pitch_label">Speech pitch</string>
     <string name="settings_pitch_value">Pitch: %1$.2fx</string>
+    <string name="settings_engine_label">Main voice engine</string>
+    <string name="settings_engine_system_default">System default</string>
     <string name="settings_voice_label">System voice</string>
     <string name="settings_voice_auto">Recommended voice (automatic)</string>
     <string name="settings_preview_button">Test voice</string>
+    <string name="settings_voice_secondary_intro">The secondary engine is configured and ready to test, but Vidente doesn\'t have any automatic announcement yet (like the time on unlock) that would use it. That\'s planned for later.</string>
+    <string name="settings_engine_secondary_label">Secondary voice engine</string>
+    <string name="settings_voice_secondary_label">Secondary voice</string>
     <string name="settings_reset_button">Reset to defaults</string>
     <string name="settings_reset_done">Defaults restored</string>
     <string name="settings_preview_text">This is how Vidente will sound when reading items on screen.</string>

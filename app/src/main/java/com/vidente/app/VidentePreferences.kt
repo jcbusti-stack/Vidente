@@ -9,6 +9,9 @@ object VidentePreferences {
     const val KEY_RATE = "speech_rate"
     const val KEY_PITCH = "speech_pitch"
     const val KEY_VOICE_NAME = "voice_name"
+    const val KEY_ENGINE_PACKAGE = "engine_package"
+    const val KEY_SECONDARY_ENGINE_PACKAGE = "secondary_engine_package"
+    const val KEY_SECONDARY_VOICE_NAME = "secondary_voice_name"
     const val KEY_BACKEND_URL = "backend_url"
     const val KEY_BACKEND_ACCESS_KEY = "backend_access_key"
     const val KEY_DEVICE_ID = "device_id"
@@ -96,6 +99,31 @@ object VidentePreferences {
 
     fun setVoiceName(context: Context, voiceName: String?) {
         prefs(context).edit().putString(KEY_VOICE_NAME, voiceName).apply()
+    }
+
+    // Motor de TTS: paquete del motor instalado (Google, BookFusion Voice,
+    // SherpaTTS, etc.). null = motor predeterminado del sistema.
+    fun getEnginePackage(context: Context): String? =
+        prefs(context).getString(KEY_ENGINE_PACKAGE, null)
+
+    fun setEnginePackage(context: Context, enginePackage: String?) {
+        prefs(context).edit().putString(KEY_ENGINE_PACKAGE, enginePackage).apply()
+    }
+
+    // Motor y voz secundarios (P9: motor de voz dual, para avisos puntuales
+    // que todavía no existen -- por ahora solo configurable y de prueba).
+    fun getSecondaryEnginePackage(context: Context): String? =
+        prefs(context).getString(KEY_SECONDARY_ENGINE_PACKAGE, null)
+
+    fun setSecondaryEnginePackage(context: Context, enginePackage: String?) {
+        prefs(context).edit().putString(KEY_SECONDARY_ENGINE_PACKAGE, enginePackage).apply()
+    }
+
+    fun getSecondaryVoiceName(context: Context): String? =
+        prefs(context).getString(KEY_SECONDARY_VOICE_NAME, null)
+
+    fun setSecondaryVoiceName(context: Context, voiceName: String?) {
+        prefs(context).edit().putString(KEY_SECONDARY_VOICE_NAME, voiceName).apply()
     }
 
     fun getBackendUrl(context: Context): String? =

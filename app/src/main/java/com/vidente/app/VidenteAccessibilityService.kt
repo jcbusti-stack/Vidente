@@ -41,6 +41,12 @@ class VidenteAccessibilityService :
 
     private var tts: TextToSpeech? = null
     private var ttsReady = false
+    // Motor secundario (P9: motor de voz dual). Queda configurado y listo
+    // para usarse, pero por ahora ningún aviso automático lo dispara todavía
+    // (no existen avisos puntuales como hora/batería/notificaciones en
+    // Vidente) -- solo lo usa el botón de prueba en Ajustes.
+    private var ttsSecondary: TextToSpeech? = null
+    private var ttsSecondaryReady = false
     private var lastSpoken: String? = null
     private var lastSpokenAt = 0L
     private var pendingText: String? = null
@@ -196,14 +202,31 @@ class VidenteAccessibilityService :
 
     override fun onCreate() {
         super.onCreate()
-        tts = TextToSpeech(this, this)
+        createPrimaryTts(VidentePreferences.getEnginePackage(this))
+        createSecondaryTts(VidentePreferences.getSecondaryEnginePackage(this))
         VidentePreferences.prefs(this).registerOnSharedPreferenceChangeListener(this)
+    }
+
+    /**
+     * Motor principal (P9: motor de voz dual). Si el motor elegido en
+     * Ajustes falla al iniciar (p. ej. no está instalado o no soporta el
+     * idioma), vuelve sola al motor predeterminado del sistema en vez de
+     * dejar a Vidente sin voz.
+     */
+    private fun createPrimaryTts(enginePackage: String?) {
+        ttsReady = false
+        tts = if (enginePackage != null) TextToSpeech(this, this, enginePackage) else TextToSpeech(this, this)
     }
 
     override fun onInit(status: Int) {
         val engine = tts
         if (status != TextToSpeech.SUCCESS || engine == null) {
             Log.e(TAG, "No se pudo inicializar TextToSpeech (status=$status)")
+            if (VidentePreferences.getEnginePackage(this) != null) {
+                Log.w(TAG, "El motor de voz principal elegido falló: vuelve al del sistema")
+                VidentePreferences.setEnginePackage(this, null)
+                createPrimaryTts(null)
+            }
             return
         }
 
@@ -269,6 +292,57 @@ class VidenteAccessibilityService :
         voice?.let { engine.voice = it }
     }
 
+    /**
+     * Motor secundario (P9: motor de voz dual), con el mismo resguardo que
+     * el principal: si el motor elegido falla al iniciar, vuelve sola al
+     * predeterminado del sistema en vez de quedar sin motor secundario.
+     */
+    private fun createSecondaryTts(enginePackage: String?) {
+        ttsSecondaryReady = false
+        val listener = TextToSpeech.OnInitListener { status ->
+            val engine = ttsSecondary
+            if (status != TextToSpeech.SUCCESS || engine == null) {
+                Log.e(TAG, "No se pudo inicializar el TTS secundario (status=$status)")
+                if (VidentePreferences.getSecondaryEnginePackage(this) != null) {
+                    Log.w(TAG, "El motor de voz secundario elegido falló: vuelve al del sistema")
+                    VidentePreferences.setSecondaryEnginePackage(this, null)
+                    createSecondaryTts(null)
+                }
+                return@OnInitListener
+            }
+            applySecondaryPreferences(engine)
+            ttsSecondaryReady = true
+        }
+        ttsSecondary = if (enginePackage != null) {
+            TextToSpeech(this, listener, enginePackage)
+        } else {
+            TextToSpeech(this, listener)
+        }
+    }
+
+    private fun applySecondaryPreferences(engine: TextToSpeech) {
+        engine.setAudioAttributes(buildAudioAttributes())
+        engine.setSpeechRate(VidentePreferences.getRate(this))
+        engine.setPitch(VidentePreferences.getPitch(this))
+        engine.language = LocaleHelper.currentLocale(this)
+        val savedVoiceName = VidentePreferences.getSecondaryVoiceName(this)
+        val voices = VoiceUtils.availableVoicesForLocale(engine, LocaleHelper.currentLocale(this))
+        val voice = voices.firstOrNull { it.name == savedVoiceName }
+            ?: VoiceUtils.bestVoiceForLocale(engine, LocaleHelper.currentLocale(this))
+        voice?.let { engine.voice = it }
+    }
+
+    /**
+     * Habla por el motor secundario. Todavía sin ningún llamador automático
+     * (ver comentario en ttsSecondary): queda lista para cuando exista un
+     * aviso puntual real que deba usarla.
+     */
+    @Suppress("unused")
+    private fun speakSecondary(text: String) {
+        if (!ttsSecondaryReady) return
+        ttsSecondary?.speak(text, TextToSpeech.QUEUE_FLUSH, null, SECONDARY_UTTERANCE_ID)
+    }
+
     // Recursos con el idioma elegido en Ajustes; null = seguir el del sistema.
     // Sobrescribir getResources() hace que todos los getString del servicio
     // usen ese idioma sin tocarlos uno a uno.
@@ -294,7 +368,23 @@ class VidenteAccessibilityService :
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         if (key == VidentePreferences.KEY_APP_LANGUAGE || key == null) refreshLocale()
-        tts?.let { applyPreferences(it) }
+
+        // Cambiar de MOTOR no alcanza con reconfigurar el TextToSpeech ya
+        // creado (un motor queda fijo desde que se construye la instancia):
+        // hay que rehacerla. El resto de los ajustes (voz, velocidad, tono)
+        // sí se pueden reaplicar sobre la instancia actual.
+        if (key == VidentePreferences.KEY_ENGINE_PACKAGE) {
+            tts?.shutdown()
+            createPrimaryTts(VidentePreferences.getEnginePackage(this))
+        } else {
+            tts?.let { applyPreferences(it) }
+        }
+        if (key == VidentePreferences.KEY_SECONDARY_ENGINE_PACKAGE) {
+            ttsSecondary?.shutdown()
+            createSecondaryTts(VidentePreferences.getSecondaryEnginePackage(this))
+        } else {
+            ttsSecondary?.let { applySecondaryPreferences(it) }
+        }
         refreshScrollFeedback()
 
         if (key == VidentePreferences.KEY_AUDIO_OUTPUT) {
@@ -2167,6 +2257,8 @@ class VidenteAccessibilityService :
         hideFloatingButton()
         tts?.stop()
         tts?.shutdown()
+        ttsSecondary?.stop()
+        ttsSecondary?.shutdown()
         super.onDestroy()
     }
 
@@ -2175,6 +2267,7 @@ class VidenteAccessibilityService :
         private const val UTTERANCE_ID = "vidente_utterance"
         private const val TUTORIAL_UTTERANCE_ID = "vidente_tutorial"
         private const val CONTINUOUS_UTTERANCE_ID = "vidente_continuo"
+        private const val SECONDARY_UTTERANCE_ID = "vidente_secundario"
         private const val FLOATING_BUTTON_MARGIN_PX = 24
         private const val MAX_DEPTH = 12
         private const val MAX_LABEL_DEPTH = 3

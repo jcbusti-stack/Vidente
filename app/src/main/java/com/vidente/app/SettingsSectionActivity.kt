@@ -48,13 +48,24 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var availableVoices: List<Voice> = emptyList()
+    private var enginePackages: List<String?> = listOf(null)
+
+    // Motor y voz secundarios (P9: motor de voz dual): instancia y estado
+    // propios, separados de la vista previa del motor principal de arriba.
+    private var ttsSecondary: TextToSpeech? = null
+    private var ttsSecondaryReady = false
+    private var secondaryAvailableVoices: List<Voice> = emptyList()
+    private var secondaryEnginePackages: List<String?> = listOf(null)
 
     private var seekRate: SeekBar? = null
     private var textRateValue: TextView? = null
     private var seekPitch: SeekBar? = null
     private var textPitchValue: TextView? = null
     private var spinnerLanguage: Spinner? = null
+    private var spinnerEngine: Spinner? = null
     private var spinnerVoice: Spinner? = null
+    private var spinnerEngineSecondary: Spinner? = null
+    private var spinnerVoiceSecondary: Spinner? = null
     private var radioGroupAudioOutput: RadioGroup? = null
     private var radioGroupScrollFeedback: RadioGroup? = null
     private var radioGroupTypingEcho: RadioGroup? = null
@@ -79,6 +90,10 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         val titleRes: Int
         val layoutRes: Int
         when (section) {
+            SECTION_VOICE_SECONDARY -> {
+                titleRes = R.string.settings_section_voice_secondary
+                layoutRes = R.layout.section_voice_secondary
+            }
             SECTION_TYPING -> { titleRes = R.string.settings_section_typing; layoutRes = R.layout.section_typing }
             SECTION_SOUND -> { titleRes = R.string.settings_section_sound; layoutRes = R.layout.section_sound }
             SECTION_TUTORIAL -> { titleRes = R.string.settings_section_tutorial; layoutRes = R.layout.section_tutorial }
@@ -91,6 +106,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
 
         when (section) {
             SECTION_VOICE -> setUpVoiceSection()
+            SECTION_VOICE_SECONDARY -> setUpVoiceSecondarySection()
             SECTION_TYPING -> setUpTypingSection()
             SECTION_SOUND -> setUpSoundSection()
             SECTION_TUTORIAL -> setUpTutorialSection()
@@ -107,6 +123,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         seekPitch = findViewById(R.id.seekPitch)
         textPitchValue = findViewById(R.id.textPitchValue)
         spinnerLanguage = findViewById(R.id.spinnerLanguage)
+        spinnerEngine = findViewById(R.id.spinnerEngine)
         spinnerVoice = findViewById(R.id.spinnerVoice)
         radioGroupAudioOutput = findViewById(R.id.radioGroupAudioOutput)
 
@@ -120,7 +137,45 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
 
         findViewById<Button>(R.id.buttonPreview).setOnClickListener { previewVoice() }
 
-        tts = TextToSpeech(this, this)
+        val enginePackage = VidentePreferences.getEnginePackage(this)
+        tts = if (enginePackage != null) TextToSpeech(this, this, enginePackage) else TextToSpeech(this, this)
+    }
+
+    /** Etiquetas y paquetes de los motores de TTS instalados, con "Predeterminado del sistema" primero. */
+    private fun engineLabelsAndPackages(engine: TextToSpeech): Pair<List<String>, List<String?>> {
+        val labels = mutableListOf(getString(R.string.settings_engine_system_default))
+        val packages = mutableListOf<String?>(null)
+        engine.engines?.forEach { info ->
+            labels += info.label
+            packages += info.name
+        }
+        return labels to packages
+    }
+
+    private fun setUpEngineSpinner() {
+        val spinner = spinnerEngine ?: return
+        val engine = tts ?: return
+        val (labels, packages) = engineLabelsAndPackages(engine)
+        enginePackages = packages
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        val saved = VidentePreferences.getEnginePackage(this)
+        spinner.setSelection(packages.indexOf(saved).coerceAtLeast(0))
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                val chosen = enginePackages.getOrNull(position)
+                if (chosen == VidentePreferences.getEnginePackage(this@SettingsSectionActivity)) return
+                VidentePreferences.setEnginePackage(this@SettingsSectionActivity, chosen)
+                tts?.shutdown()
+                ttsReady = false
+                tts = if (chosen != null) {
+                    TextToSpeech(this@SettingsSectionActivity, this@SettingsSectionActivity, chosen)
+                } else {
+                    TextToSpeech(this@SettingsSectionActivity, this@SettingsSectionActivity)
+                }
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
     }
 
     private fun setUpLanguageSpinner() {
@@ -249,6 +304,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         ttsReady = true
 
         applyAudioOutputToTts()
+        setUpEngineSpinner()
         availableVoices = VoiceUtils.availableVoicesForLocale(engine, LocaleHelper.currentLocale(this))
         setUpVoiceSpinner()
     }
@@ -288,6 +344,87 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         engine.setPitch(currentPitch)
         applyVoiceToTts(VidentePreferences.getVoiceName(this))
         engine.speak(getString(R.string.settings_preview_text), TextToSpeech.QUEUE_FLUSH, null, PREVIEW_UTTERANCE_ID)
+    }
+
+    // ---- Voz secundaria (P9: motor de voz dual, avanzado) ----
+
+    private fun setUpVoiceSecondarySection() {
+        spinnerEngineSecondary = findViewById(R.id.spinnerEngineSecondary)
+        spinnerVoiceSecondary = findViewById(R.id.spinnerVoiceSecondary)
+        findViewById<Button>(R.id.buttonPreviewSecondary).setOnClickListener { previewSecondaryVoice() }
+
+        val enginePackage = VidentePreferences.getSecondaryEnginePackage(this)
+        createSecondaryPreviewTts(enginePackage)
+    }
+
+    private fun createSecondaryPreviewTts(enginePackage: String?) {
+        ttsSecondaryReady = false
+        val listener = TextToSpeech.OnInitListener { status ->
+            val engine = ttsSecondary
+            if (status != TextToSpeech.SUCCESS || engine == null) return@OnInitListener
+            engine.language = LocaleHelper.currentLocale(this)
+            ttsSecondaryReady = true
+            setUpEngineSecondarySpinner()
+            secondaryAvailableVoices = VoiceUtils.availableVoicesForLocale(engine, LocaleHelper.currentLocale(this))
+            setUpVoiceSecondarySpinner()
+        }
+        ttsSecondary = if (enginePackage != null) {
+            TextToSpeech(this, listener, enginePackage)
+        } else {
+            TextToSpeech(this, listener)
+        }
+    }
+
+    private fun setUpEngineSecondarySpinner() {
+        val spinner = spinnerEngineSecondary ?: return
+        val engine = ttsSecondary ?: return
+        val (labels, packages) = engineLabelsAndPackages(engine)
+        secondaryEnginePackages = packages
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        val saved = VidentePreferences.getSecondaryEnginePackage(this)
+        spinner.setSelection(packages.indexOf(saved).coerceAtLeast(0))
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                val chosen = secondaryEnginePackages.getOrNull(position)
+                if (chosen == VidentePreferences.getSecondaryEnginePackage(this@SettingsSectionActivity)) return
+                VidentePreferences.setSecondaryEnginePackage(this@SettingsSectionActivity, chosen)
+                ttsSecondary?.shutdown()
+                createSecondaryPreviewTts(chosen)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+    }
+
+    private fun setUpVoiceSecondarySpinner() {
+        val spinner = spinnerVoiceSecondary ?: return
+        val labels = mutableListOf(getString(R.string.settings_voice_auto))
+        labels += secondaryAvailableVoices.map { VoiceUtils.displayName(it) }
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+
+        val savedVoiceName = VidentePreferences.getSecondaryVoiceName(this)
+        val savedIndex = secondaryAvailableVoices.indexOfFirst { it.name == savedVoiceName }
+        spinner.setSelection(if (savedIndex >= 0) savedIndex + 1 else 0)
+
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                val voiceName = if (position == 0) null else secondaryAvailableVoices[position - 1].name
+                VidentePreferences.setSecondaryVoiceName(this@SettingsSectionActivity, voiceName)
+                val engine = ttsSecondary ?: return
+                val voice = secondaryAvailableVoices.firstOrNull { it.name == voiceName }
+                engine.voice = voice ?: VoiceUtils.bestVoiceForLocale(engine, LocaleHelper.currentLocale(this@SettingsSectionActivity))
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+    }
+
+    private fun previewSecondaryVoice() {
+        val engine = ttsSecondary ?: return
+        if (!ttsSecondaryReady) return
+        engine.setSpeechRate(currentRate)
+        engine.setPitch(currentPitch)
+        engine.speak(getString(R.string.settings_preview_text), TextToSpeech.QUEUE_FLUSH, null, PREVIEW_SECONDARY_UTTERANCE_ID)
     }
 
     // ---- Escritura y teclado ----
@@ -409,6 +546,9 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         VidentePreferences.setRate(this, VidentePreferences.DEFAULT_RATE)
         VidentePreferences.setPitch(this, VidentePreferences.DEFAULT_PITCH)
         VidentePreferences.setVoiceName(this, null)
+        VidentePreferences.setEnginePackage(this, null)
+        VidentePreferences.setSecondaryEnginePackage(this, null)
+        VidentePreferences.setSecondaryVoiceName(this, null)
         VidentePreferences.setAudioOutput(this, VidentePreferences.DEFAULT_AUDIO_OUTPUT)
         VidentePreferences.setScrollFeedback(this, VidentePreferences.DEFAULT_SCROLL_FEEDBACK)
         VidentePreferences.setTypingEcho(this, VidentePreferences.DEFAULT_TYPING_ECHO)
@@ -420,6 +560,8 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     override fun onDestroy() {
         tts?.stop()
         tts?.shutdown()
+        ttsSecondary?.stop()
+        ttsSecondary?.shutdown()
         super.onDestroy()
     }
 
@@ -427,6 +569,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         const val EXTRA_SECTION = "section"
         const val EXTRA_REQUEST_MIC = "request_mic"
         const val SECTION_VOICE = "voice"
+        const val SECTION_VOICE_SECONDARY = "voice_secondary"
         const val SECTION_TYPING = "typing"
         const val SECTION_SOUND = "sound"
         const val SECTION_TUTORIAL = "tutorial"
@@ -435,5 +578,6 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
 
         private const val SEEK_STEPS = 100
         private const val PREVIEW_UTTERANCE_ID = "vidente_preview"
+        private const val PREVIEW_SECONDARY_UTTERANCE_ID = "vidente_preview_secondary"
     }
 }

@@ -26,6 +26,13 @@
             android:text="@string/settings_section_voice" />
 
         <Button
+            android:id="@+id/buttonSectionVoiceSecondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="@string/settings_section_voice_secondary" />
+
+        <Button
             android:id="@+id/buttonSectionTyping"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

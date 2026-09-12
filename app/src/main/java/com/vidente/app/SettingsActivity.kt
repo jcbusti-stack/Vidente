@@ -21,6 +21,7 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_settings)
 
         openSection(R.id.buttonSectionVoice, SettingsSectionActivity.SECTION_VOICE)
+        openSection(R.id.buttonSectionVoiceSecondary, SettingsSectionActivity.SECTION_VOICE_SECONDARY)
         openSection(R.id.buttonSectionTyping, SettingsSectionActivity.SECTION_TYPING)
         openSection(R.id.buttonSectionSound, SettingsSectionActivity.SECTION_SOUND)
         openSection(R.id.buttonSectionTutorial, SettingsSectionActivity.SECTION_TUTORIAL)
