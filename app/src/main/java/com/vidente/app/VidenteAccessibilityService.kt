@@ -1468,9 +1468,19 @@ class VidenteAccessibilityService :
         if (typingEcho == VidentePreferences.TYPING_ECHO_NONE) return
         if (!keyboardVisible) return
 
-        val now = event.text?.joinToString("") ?: return
+        var now = event.text?.joinToString("") ?: return
         val before = event.beforeText?.toString() ?: ""
         if (now == before) return
+
+        // Al quedar vacío, TextView reporta su hint (p. ej. "Mensaje") como si
+        // fuera el texto propio -- convención de AOSP para que el lector de
+        // pantalla anuncie el hint en un campo vacío. Sin este ajuste, el
+        // diff de abajo tomaba ese hint como "texto agregado" y lo leía en
+        // vez de anunciar la letra que se acababa de borrar.
+        val source = event.source
+        val hint = source?.hintText?.toString()
+        source?.recycle()
+        if (hint != null && now == hint && before.isNotEmpty()) now = ""
 
         // Prefijo común.
         var p = 0
