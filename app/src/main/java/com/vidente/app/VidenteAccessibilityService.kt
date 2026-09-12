@@ -1052,8 +1052,15 @@ class VidenteAccessibilityService :
             null
         }
 
+        val className = node.className?.toString().orEmpty()
         when {
             stateDescription != null -> states.add(stateDescription)
+            // Opción de un grupo (RadioButton): solo se anuncia la elegida
+            // ("marcada"); las demás no dicen nada, para no repetir
+            // "activado/desactivado" en cada una de la lista.
+            className.endsWith("RadioButton") -> {
+                if (node.isChecked) states.add(getString(R.string.spoken_state_checked))
+            }
             node.isCheckable -> states.add(
                 getString(if (node.isChecked) R.string.spoken_state_on else R.string.spoken_state_off)
             )

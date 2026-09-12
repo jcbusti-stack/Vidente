@@ -86,7 +86,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:contentDescription="@string/settings_audio_output_label"
         android:orientation="vertical">
 
         <RadioButton
