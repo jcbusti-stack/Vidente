@@ -64,6 +64,7 @@ class VidenteAccessibilityService :
     private var secondarySpeaking = false
     private val pendingSecondaryQueue = mutableListOf<String>()
     private var audioFocusRequest: AudioFocusRequest? = null
+    private var duckingReleaseRunnable: Runnable? = null
     // Momento del último ACTION_USER_PRESENT; ver el comentario en speak().
     private var lastUnlockAt = 0L
     // Control de ruido del aviso de notificaciones; ver handleNotification().
@@ -447,31 +448,67 @@ class VidenteAccessibilityService :
     private fun updateAudioDucking(speaking: Boolean) {
         val audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
         if (speaking) {
+            // Si había un soltado pendiente (ver rama else) de una locución
+            // anterior muy cercana, se cancela: seguimos sosteniendo el mismo
+            // focus en vez de soltarlo y volver a pedirlo enseguida.
+            duckingReleaseRunnable?.let { mainHandler.removeCallbacks(it) }
+            duckingReleaseRunnable = null
             if (audioFocusRequest != null) return
             val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-                .setAudioAttributes(buildAudioAttributes())
+                // USAGE_ASSISTANCE_ACCESSIBILITY siempre para este pedido,
+                // sin importar qué salida eligió el usuario para el TTS
+                // (buildAudioAttributes() puede ser USAGE_MEDIA, elegido por
+                // temas de Bluetooth): Android trata el ducking pedido por
+                // este uso de forma más confiable, pensado justo para que un
+                // lector de pantalla baje el volumen de otros audios.
+                .setAudioAttributes(duckingAudioAttributes())
                 // Sin manejo especial: si algo de más prioridad (una llamada)
                 // se queda con el focus, Vidente sigue hablando igual y
                 // simplemente vuelve a pedirlo en la próxima locución.
                 .setOnAudioFocusChangeListener { }
                 .build()
             try {
-                audioManager.requestAudioFocus(request)
+                val result = audioManager.requestAudioFocus(request)
                 audioFocusRequest = request
+                // DIAGNÓSTICO TEMPORAL (bug 3): confirma si Android concede
+                // el ducking. Sacar este speakSecondary una vez cerrado el bug.
+                speakSecondary(
+                    "Diag ducking: " + when (result) {
+                        AudioManager.AUDIOFOCUS_REQUEST_GRANTED -> "concedido"
+                        AudioManager.AUDIOFOCUS_REQUEST_FAILED -> "fallido"
+                        else -> "demorado"
+                    }
+                )
             } catch (e: Exception) {
                 Log.w(TAG, "No se pudo pedir audio focus para el ducking", e)
             }
         } else {
-            audioFocusRequest?.let {
-                try {
-                    audioManager.abandonAudioFocusRequest(it)
-                } catch (e: Exception) {
-                    Log.w(TAG, "No se pudo soltar el audio focus", e)
+            // Se suelta con un pequeño margen, no al instante: una seguidilla
+            // de locuciones cortas (explorar tocando varios elementos
+            // seguidos) no debe soltar y volver a pedir el focus en cada una
+            // -- eso no le daba tiempo a Android de aplicar la baja de
+            // volumen antes de devolverla.
+            duckingReleaseRunnable?.let { mainHandler.removeCallbacks(it) }
+            val r = Runnable {
+                audioFocusRequest?.let {
+                    try {
+                        audioManager.abandonAudioFocusRequest(it)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "No se pudo soltar el audio focus", e)
+                    }
                 }
+                audioFocusRequest = null
             }
-            audioFocusRequest = null
+            duckingReleaseRunnable = r
+            mainHandler.postDelayed(r, DUCKING_RELEASE_DELAY_MS)
         }
     }
+
+    private fun duckingAudioAttributes(): AudioAttributes =
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
 
     // P9 aviso de carga completa: solo la primera vez que se llega a 100%,
     // no cada vez que llega ACTION_BATTERY_CHANGED (que es muy seguido).
@@ -1754,10 +1791,15 @@ class VidenteAccessibilityService :
             // reversión en el mismo eje (izquierda-y-derecha), que ya se supo
             // que Android no reconoce bien en esta app.
             GESTURE_SWIPE_UP_AND_LEFT -> {
+                // DIAGNÓSTICO TEMPORAL (bug 1): confirma que Android
+                // reconoce este gesto compuesto. Sacar esta línea una vez
+                // cerrado el bug.
+                speakSecondary("Diag: gesto arriba izquierda detectado")
                 moveCursorToFieldBoundary(toStart = true)
                 return true
             }
             GESTURE_SWIPE_UP_AND_RIGHT -> {
+                speakSecondary("Diag: gesto arriba derecha detectado")
                 moveCursorToFieldBoundary(toStart = false)
                 return true
             }
@@ -1894,11 +1936,21 @@ class VidenteAccessibilityService :
      * mecanismo que ya usa el eco de escritura) para no anunciarlo dos veces.
      */
     private fun moveCursorToFieldBoundary(toStart: Boolean): Boolean {
-        val root = rootInActiveWindow ?: return false
+        // DIAGNÓSTICO TEMPORAL (bug 1): un aviso por voz secundaria en cada
+        // punto en el que esta función podría fallar en silencio. Sacar
+        // todas las líneas marcadas una vez cerrado el bug.
+        val root = rootInActiveWindow ?: run {
+            speakSecondary("Diag: sin rootInActiveWindow")
+            return false
+        }
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         root.recycle()
-        focused ?: return false
+        if (focused == null) {
+            speakSecondary("Diag: sin nodo con foco de accesibilidad")
+            return false
+        }
         if (!focused.isEditable) {
+            speakSecondary("Diag: el nodo con foco no es editable")
             focused.recycle()
             return false
         }
@@ -1910,6 +1962,7 @@ class VidenteAccessibilityService :
         }
         suppressCursorEchoUntil = SystemClock.uptimeMillis() + CURSOR_ECHO_SUPPRESS_MS
         val done = focused.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, args)
+        if (!done) speakSecondary("Diag: ACTION_SET_SELECTION rechazada")
         focused.recycle()
         if (done) {
             lastCursorIndex = index
@@ -2803,6 +2856,7 @@ class VidenteAccessibilityService :
         // "asentarse" en un elemento antes de anunciarlo al explorar.
         private const val HOVER_SPEAK_DEBOUNCE_MS = 90L
         private const val DELETE_ECHO_DEBOUNCE_MS = 200L
+        private const val DUCKING_RELEASE_DELAY_MS = 500L
         // Vibración de exploración: muy corta y suave, para que no moleste al
         // recorrer la pantalla ni se solape con la voz.
         private const val HOVER_VIBRATION_MS = 28L
