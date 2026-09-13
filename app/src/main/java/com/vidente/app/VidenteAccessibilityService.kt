@@ -1265,7 +1265,7 @@ class VidenteAccessibilityService :
             // código fuente de Android), y eso pisaba "marcada"/"sin marcar"
             // sin que Vidente llegara a usar su propia palabra nunca (bug
             // real desde el build 82, no algo nuevo).
-            className.endsWith("RadioButton") -> states.add(
+            className.endsWith("RadioButton") || className.endsWith("CheckBox") -> states.add(
                 getString(if (node.isChecked) R.string.spoken_state_checked else R.string.spoken_state_unchecked)
             )
             // stateDescription lo define la app y es más preciso que
