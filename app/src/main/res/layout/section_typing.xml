@@ -77,4 +77,11 @@
         android:layout_marginBottom="24dp"
         android:text="@string/settings_cursor_announce_label" />
 
+    <CheckBox
+        android:id="@+id/checkboxAnnounceUppercase"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_uppercase_label" />
+
 </LinearLayout>

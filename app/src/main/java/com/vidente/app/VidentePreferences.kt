@@ -89,6 +89,13 @@ object VidentePreferences {
     const val CURSOR_ANNOUNCE_OFF = "off"
     const val DEFAULT_CURSOR_ANNOUNCE = CURSOR_ANNOUNCE_ON
 
+    // Aviso de "Mayúscula" antes de una letra mayúscula sola, al teclear un
+    // carácter suelto, al explorar carácter por carácter (P7) o al leer el
+    // carácter que el cursor acaba de pasar. Activado por defecto, como
+    // TalkBack.
+    const val KEY_ANNOUNCE_UPPERCASE = "announce_uppercase"
+    const val DEFAULT_ANNOUNCE_UPPERCASE = true
+
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
     const val MIN_RATE = 0.5f
@@ -289,6 +296,13 @@ object VidentePreferences {
 
     fun setCursorAnnounce(context: Context, value: String) {
         prefs(context).edit().putString(KEY_CURSOR_ANNOUNCE, value).apply()
+    }
+
+    fun getAnnounceUppercase(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_UPPERCASE, DEFAULT_ANNOUNCE_UPPERCASE)
+
+    fun setAnnounceUppercase(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_UPPERCASE, enabled).apply()
     }
 
     /**

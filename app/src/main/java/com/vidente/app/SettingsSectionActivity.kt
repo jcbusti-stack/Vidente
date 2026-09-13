@@ -503,6 +503,9 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
 
         setUpKeyboardWriteModeSpinner()
         setUpCursorAnnounceSpinner()
+        setUpBooleanCheckbox(R.id.checkboxAnnounceUppercase, VidentePreferences.getAnnounceUppercase(this)) {
+            VidentePreferences.setAnnounceUppercase(this, it)
+        }
     }
 
     private fun setUpKeyboardWriteModeSpinner() {
@@ -627,6 +630,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         VidentePreferences.setTypingEcho(this, VidentePreferences.DEFAULT_TYPING_ECHO)
         VidentePreferences.setKeyboardWriteMode(this, VidentePreferences.DEFAULT_KEYBOARD_WRITE_MODE)
         VidentePreferences.setCursorAnnounce(this, VidentePreferences.DEFAULT_CURSOR_ANNOUNCE)
+        VidentePreferences.setAnnounceUppercase(this, VidentePreferences.DEFAULT_ANNOUNCE_UPPERCASE)
         Toast.makeText(this, R.string.settings_reset_done, Toast.LENGTH_SHORT).show()
     }
 

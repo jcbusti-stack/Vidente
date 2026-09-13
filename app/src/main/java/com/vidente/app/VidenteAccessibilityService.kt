@@ -198,6 +198,7 @@ class VidenteAccessibilityService :
     // y leer la selección si hay texto seleccionado. Configurable en Ajustes;
     // por defecto activado.
     private var cursorAnnounceEnabled = true
+    private var announceUppercase = true
     private var lastCursorIndex = -1
     // Identifica el campo al que corresponde lastCursorIndex (id de vista, o
     // el propio texto leído si no tiene id), para no reiniciar la referencia
@@ -911,6 +912,7 @@ class VidenteAccessibilityService :
         keyboardWriteMode = VidentePreferences.getKeyboardWriteMode(this)
         cursorAnnounceEnabled =
             VidentePreferences.getCursorAnnounce(this) == VidentePreferences.CURSOR_ANNOUNCE_ON
+        announceUppercase = VidentePreferences.getAnnounceUppercase(this)
     }
 
     /**
@@ -1799,6 +1801,20 @@ class VidenteAccessibilityService :
         return done
     }
 
+    /**
+     * Antepone "Mayúscula" a una letra mayúscula sola (ajuste configurable,
+     * activado por defecto), igual que TalkBack. Character.isUpperCase() es
+     * una propiedad Unicode del carácter en sí: no depende de qué teclado ni
+     * layout se usó para escribirlo, así que funciona igual por eco de
+     * escritura que por exploración con gestos.
+     */
+    private fun withUppercaseAnnounced(ch: Char): String =
+        if (announceUppercase && ch.isUpperCase()) {
+            getString(R.string.spoken_uppercase_letter, ch.toString())
+        } else {
+            ch.toString()
+        }
+
     private fun handleTextTraversed(event: AccessibilityEvent) {
         val full = event.text?.joinToString("") ?: return
         val from = event.fromIndex
@@ -1807,7 +1823,15 @@ class VidenteAccessibilityService :
         val piece = full.substring(from, to)
         if (piece.isNotBlank()) {
             lastSpoken = piece
-            speak(piece)
+            // El aviso de mayúscula solo aplica al recorrer carácter por
+            // carácter (P7): no tendría sentido antes de leer una palabra,
+            // línea o párrafo entero.
+            val toSpeak = if (navMode == NavMode.CHARACTER && piece.length == 1) {
+                withUppercaseAnnounced(piece[0])
+            } else {
+                piece
+            }
+            speak(toSpeak)
         }
     }
 
@@ -1892,7 +1916,8 @@ class VidenteAccessibilityService :
         // Carácter suelto, o trozo insertado (pegado / sugerencia del teclado).
         if (echoChars) {
             when {
-                addedText.length == 1 && !addedText[0].isWhitespace() -> speak(addedText)
+                addedText.length == 1 && !addedText[0].isWhitespace() ->
+                    speak(withUppercaseAnnounced(addedText[0]))
                 addedText.length > 1 ->
                     speak(addedText.take(TYPING_ECHO_MAX_CHARS).trim().ifBlank { getString(R.string.spoken_space) })
             }
@@ -2006,7 +2031,7 @@ class VidenteAccessibilityService :
         val idx = if (from > prev) from - 1 else from
         if (idx in text.indices) {
             val ch = text[idx]
-            speak(if (ch.isWhitespace()) getString(R.string.spoken_space) else ch.toString())
+            speak(if (ch.isWhitespace()) getString(R.string.spoken_space) else withUppercaseAnnounced(ch))
         }
     }
 

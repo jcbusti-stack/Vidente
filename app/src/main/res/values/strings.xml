@@ -180,6 +180,8 @@
     <string name="settings_typing_echo_none">Desactivado</string>
     <string name="settings_keyboard_write_mode_label">Modo de escritura en teclado</string>
     <string name="settings_keyboard_write_mode_double_tap">Doble toque</string>
+    <string name="settings_announce_uppercase_label">Anunciar mayúsculas al deletrear</string>
+    <string name="spoken_uppercase_letter">Mayúscula %1$s</string>
     <string name="settings_keyboard_write_mode_slide_release">Deslizar y soltar</string>
     <string name="settings_cursor_announce_label">Anuncio de posición del cursor</string>
     <string name="settings_cursor_announce_on">Activado</string>
