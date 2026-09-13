@@ -11,7 +11,6 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.PixelFormat
-import android.graphics.Rect
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.media.AudioDeviceCallback
@@ -1101,20 +1100,6 @@ class VidenteAccessibilityService :
             lastHoverAt = now
             interactedSinceScreenChange = true
             vibrateTick()
-            // DIAGNÓSTICO TEMPORAL (bug 2): el toque directo sí encuentra este
-            // nodo (llegamos hasta acá), así que compara contra lo que ve
-            // treeSuccessor parado exactamente en él -- padre, índice entre
-            // sus hermanos, y cuál es el siguiente hermano real. Sacar esta
-            // llamada y speakHoverTraversalDiagnostic() una vez cerrado el bug.
-            // Envuelto en try/catch: handleFocusEvent corre en cada toque y no
-            // tiene su propio resguardo, así que cualquier falla acá no debe
-            // tumbar el servicio entero (esto fue justo lo que pasó en build
-            // 102, con un getChild() fuera de rango sin capturar).
-            try {
-                speakHoverTraversalDiagnostic(node)
-            } catch (e: Exception) {
-                Log.e(TAG, "speakHoverTraversalDiagnostic falló", e)
-            }
         }
 
         // Vidente gestiona el foco de accesibilidad: al leer un elemento por
@@ -1302,13 +1287,21 @@ class VidenteAccessibilityService :
         ownLabel(node)?.let { return it }
 
         // Solo se sintetiza una etiqueta mirando hijos o hermanos cuando el
-        // nodo es una fila o un control (clickable, casilla, Switch, campo…).
-        // Para un contenedor grande sin texto propio —el área de páginas del
-        // launcher, por ejemplo— no se inventa nada: al tocar un hueco vacío,
-        // la búsqueda en descendientes acababa leyendo el texto de un widget
-        // ("Tiempo") que vivía en otra página del mismo contenedor.
+        // nodo es una fila o un control (clickable, casilla, Switch, campo…),
+        // o cuando la propia app lo marcó como parada de lector de pantalla
+        // (isScreenReaderFocusable) sin ponerle texto a él mismo -- caso real:
+        // el encabezado "Recientes" del menú de Claude vive en un contenedor
+        // de un solo hijo marcado así, con el texto en ese hijo. Sin este
+        // agregado, treeSuccessor sí llegaba al contenedor pero
+        // describeForSpeech no encontraba ninguna etiqueta y se quedaba mudo.
+        // Para un contenedor grande sin texto propio y sin esa marca —el área
+        // de páginas del launcher, por ejemplo— no se inventa nada: al tocar
+        // un hueco vacío, la búsqueda en descendientes acababa leyendo el
+        // texto de un widget ("Tiempo") que vivía en otra página del mismo
+        // contenedor.
+        val screenReaderStop = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && node.isScreenReaderFocusable
         val synthesises = node.isClickable || node.isCheckable || node.isEditable ||
-            isRecognisedControl(node)
+            isRecognisedControl(node) || screenReaderStop
         if (!synthesises) return null
 
         return labelFromDescendants(node, depth = 0) ?: labelFromSiblings(node)
@@ -1629,14 +1622,6 @@ class VidenteAccessibilityService :
             GESTURE_SWIPE_DOWN -> {
                 if (isDebounced(gestureId)) return true
                 cycleNavMode()
-                return true
-            }
-            // DIAGNÓSTICO TEMPORAL (bug 2 -- posible hueco en el recorrido de
-            // elemento por elemento). Gesto sin usar (izquierda y derecha),
-            // así que no pisa ninguna función real. Sacar este caso y
-            // runNavigationTraversalDiagnostic() una vez cerrado el bug.
-            GESTURE_SWIPE_LEFT_AND_RIGHT -> {
-                runNavigationTraversalDiagnostic()
                 return true
             }
             // Mismo resguardo que los demás gestos: si Android llega a
@@ -2112,86 +2097,6 @@ class VidenteAccessibilityService :
         return node.isCheckable
     }
 
-    /**
-     * DIAGNÓSTICO TEMPORAL (bug 2 -- posible hueco en el recorrido de
-     * elemento por elemento, no en el filtro isNavigable()). Compara TODO lo
-     * que el sistema operativo expone en la pantalla actual (collectAllNodes,
-     * sin filtrar) contra lo que el recorrido de deslizar realmente visita
-     * (simulateTraversalSequence, que repite exactamente el mismo camino que
-     * treeSuccessor/firstNavigableInSubtree usan en un deslizamiento real) y
-     * dice por voz secundaria, en una sola frase, qué nodos con texto quedan
-     * afuera del recorrido. Si la lista sale vacía, el recorrido está
-     * llegando a todos lados y el problema es que el sistema operativo nunca
-     * expone ese nodo. Sacar esta función y su gesto (GESTURE_SWIPE_LEFT_AND_RIGHT
-     * en onGesture) una vez confirmada la causa real.
-     */
-    private fun runNavigationTraversalDiagnostic() {
-        val root = rootInActiveWindow ?: return
-        val full = collectAllNodes(root)
-        val visited = simulateTraversalSequence(root)
-        root.recycle()
-
-        fun signature(n: AccessibilityNodeInfo): String {
-            val b = Rect()
-            n.getBoundsInScreen(b)
-            return "${n.className}|${n.text}|${n.contentDescription}|$b"
-        }
-
-        val visitedSignatures = visited.map(::signature).toHashSet()
-        val labeledFull = full.filter { ownLabel(it) != null }
-        val missing = labeledFull
-            .filter { signature(it) !in visitedSignatures }
-            .mapNotNull { ownLabel(it) }
-            .distinct()
-        val labeledCount = labeledFull.size
-
-        full.forEach { it.recycle() }
-        visited.forEach { it.recycle() }
-
-        // Se dice también el total: si "missing" sale vacío porque el nodo
-        // buscado nunca estuvo en la lista completa (no lo expone el sistema
-        // operativo), el total sirve para notarlo por comparación, ya que un
-        // "sin visitar" vacío por sí solo no distingue ese caso de que sí
-        // se haya visitado bien.
-        val summary = if (missing.isEmpty()) {
-            "Diagnóstico: $labeledCount nodos con texto en la pantalla, todos visitados por el recorrido."
-        } else {
-            "Diagnóstico: $labeledCount nodos con texto en la pantalla. " +
-                "${missing.size} sin visitar por el recorrido: " + missing.joinToString(", ")
-        }
-        speakSecondary(summary)
-    }
-
-    /**
-     * Repite el mismo camino que produciría una serie real de deslizamientos
-     * hacia adelante en esta pantalla, sin mover el foco de accesibilidad de
-     * verdad (solo para el diagnóstico de arriba): arranca en el primer
-     * navegable y encadena treeSuccessor hasta agotar la pantalla.
-     */
-    @Suppress("DEPRECATION")
-    private fun simulateTraversalSequence(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
-        val out = mutableListOf<AccessibilityNodeInfo>()
-        treeWalkBudget = TREE_WALK_BUDGET
-        var current = try {
-            firstNavigableInSubtree(root, includeSelf = false, forward = true)
-        } catch (e: Exception) {
-            null
-        }
-        var steps = 0
-        while (current != null && steps < MAX_ALL_NODES) {
-            out.add(current)
-            treeWalkBudget = TREE_WALK_BUDGET
-            val next = try {
-                treeSuccessor(current, forward = true)
-            } catch (e: Exception) {
-                null
-            }
-            steps++
-            current = next
-        }
-        return out
-    }
-
     /** Todos los nodos visibles en orden de lectura, sin filtrar ni colapsar. */
     @Suppress("DEPRECATION")
     private fun collectAllNodes(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
@@ -2258,53 +2163,6 @@ class VidenteAccessibilityService :
         }
         t.recycle()
         return done
-    }
-
-    /**
-     * DIAGNÓSTICO TEMPORAL (bug 2 -- swipe se salta un nodo que el toque
-     * directo sí encuentra). Se llama desde handleFocusEvent en cada hover
-     * (toque directo), que ya sabemos que SÍ ubica el nodo correcto. Dice por
-     * voz secundaria qué ve indexInParent/treeSuccessor parado en ese mismo
-     * nodo: si no encuentra su índice entre los hijos de su padre (idx < 0),
-     * ahí está el hueco -- treeSuccessor se queda sin poder ubicarlo entre
-     * sus hermanos aunque el nodo exista y sea válido. Sacar esta función
-     * (y su llamada en handleFocusEvent) una vez cerrado el bug.
-     */
-    @Suppress("DEPRECATION")
-    private fun speakHoverTraversalDiagnostic(node: AccessibilityNodeInfo) {
-        val parent = try { node.parent } catch (e: Exception) { null }
-        if (parent == null) {
-            speakSecondary("Diag: este nodo no tiene padre.")
-            return
-        }
-        val idx = indexInParent(parent, node)
-        if (idx < 0) {
-            speakSecondary(
-                "Diag: índice no encontrado entre los ${parent.childCount} hijos del padre. " +
-                    "Ahí está el hueco."
-            )
-            parent.recycle()
-            return
-        }
-        // getChild(index) lanza IndexOutOfBoundsException si el índice no es
-        // menor que childCount -- documentado en AccessibilityNodeInfo. El
-        // nodo tocado suele ser el ÚLTIMO hijo de su padre (ej. un botón
-        // envuelto en un contenedor de un solo hijo), así que sin este chequeo
-        // esto tumbaba el servicio en casi cualquier toque.
-        val nextChild = if (idx + 1 < parent.childCount) parent.getChild(idx + 1) else null
-        val nextDesc = if (nextChild == null) {
-            "ninguno"
-        } else {
-            val cls = nextChild.className?.toString()?.substringAfterLast('.') ?: "desconocido"
-            val lbl = ownLabel(nextChild) ?: "sin etiqueta"
-            val nav = isNavigable(nextChild)
-            nextChild.recycle()
-            "$cls, $lbl, navegable ${if (nav) "sí" else "no"}"
-        }
-        speakSecondary(
-            "Diag: índice $idx de ${parent.childCount} hijos. Siguiente hermano real: $nextDesc."
-        )
-        parent.recycle()
     }
 
     /**
