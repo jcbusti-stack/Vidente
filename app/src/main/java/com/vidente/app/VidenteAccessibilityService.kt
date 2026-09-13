@@ -155,6 +155,7 @@ class VidenteAccessibilityService :
     private var lastWindowTitle: String? = null
     private var pendingTitleRunnable: Runnable? = null
     private var pendingKeyboardRunnable: Runnable? = null
+    private var pendingHoverSpeakRunnable: Runnable? = null
     private var pendingScrollRunnable: Runnable? = null
     private var lastScrollBoundary: String? = null      // "fin" | "inicio" | null
     private var lastSpokenScrollPos: String? = null     // dedupe del porcentaje hablado
@@ -636,6 +637,10 @@ class VidenteAccessibilityService :
         // El cursor de la pantalla anterior no tiene nada que ver con la nueva.
         lastCursorIndex = -1
         lastCursorFieldKey = null
+        // Un anuncio de exploración pendiente de la pantalla anterior no
+        // debe sonar en la nueva.
+        pendingHoverSpeakRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingHoverSpeakRunnable = null
     }
 
     /**
@@ -1044,7 +1049,21 @@ class VidenteAccessibilityService :
             lastCursorIndex = -1
         }
         val toSpeak = if (boundary != null) "$boundary. $text" else text
-        if (ttsReady) speak(toSpeak) else pendingText = toSpeak
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER) {
+            // Explorar arrastrando el dedo: si se pasa rápido por varios
+            // elementos, cada hover cancela el anuncio pendiente del
+            // anterior y solo se dice el que el dedo alcanza a "asentarse"
+            // este instante corto, en vez de anunciar (y cortar) uno por
+            // cada elemento que el dedo apenas rozó de pasada. El resto de
+            // la función (foco, cursor, dedup) ya corrió arriba, sin
+            // cambios: solo el habla queda debounced.
+            pendingHoverSpeakRunnable?.let { mainHandler.removeCallbacks(it) }
+            val r = Runnable { if (ttsReady) speak(toSpeak) else pendingText = toSpeak }
+            pendingHoverSpeakRunnable = r
+            mainHandler.postDelayed(r, HOVER_SPEAK_DEBOUNCE_MS)
+        } else {
+            if (ttsReady) speak(toSpeak) else pendingText = toSpeak
+        }
 
         // Después de leer el campo, para que "Teclado en pantalla" (QUEUE_ADD)
         // se encole detrás y no lo pise.
@@ -1232,7 +1251,6 @@ class VidenteAccessibilityService :
     private fun statesOf(node: AccessibilityNodeInfo): List<String> {
         val states = mutableListOf<String>()
 
-        // stateDescription lo define la app y es más preciso que deducirlo.
         val stateDescription = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             node.stateDescription?.toString()?.takeIf { it.isNotBlank() }
         } else {
@@ -1241,13 +1259,18 @@ class VidenteAccessibilityService :
 
         val className = node.className?.toString().orEmpty()
         when {
-            stateDescription != null -> states.add(stateDescription)
-            // Opción de un grupo (RadioButton): "marcada" o "sin marcar",
-            // nunca "activado/desactivado" (esas palabras ya son el nombre
-            // de la opción cuando son del estilo "Activado"/"Desactivado").
+            // Va antes que stateDescription a propósito: Android le pone
+            // solo, a CUALQUIER RadioButton/CheckBox, un stateDescription
+            // automático ("seleccionado"/"no seleccionado", confirmado en el
+            // código fuente de Android), y eso pisaba "marcada"/"sin marcar"
+            // sin que Vidente llegara a usar su propia palabra nunca (bug
+            // real desde el build 82, no algo nuevo).
             className.endsWith("RadioButton") -> states.add(
                 getString(if (node.isChecked) R.string.spoken_state_checked else R.string.spoken_state_unchecked)
             )
+            // stateDescription lo define la app y es más preciso que
+            // deducirlo, para el resto de los controles.
+            stateDescription != null -> states.add(stateDescription)
             node.isCheckable -> states.add(
                 getString(if (node.isChecked) R.string.spoken_state_on else R.string.spoken_state_off)
             )
@@ -2436,6 +2459,9 @@ class VidenteAccessibilityService :
         private const val SCROLL_AFTER_SCREEN_CHANGE_GUARD_MS = 700L
         private const val BOUNDARY_NEEDS_RECENT_MID_MS = 1500L
         private const val HOVER_OWNS_FOCUS_MS = 1200L
+        // Ver el comentario en handleFocusEvent(): tiempo que el dedo debe
+        // "asentarse" en un elemento antes de anunciarlo al explorar.
+        private const val HOVER_SPEAK_DEBOUNCE_MS = 90L
         // Vibración de exploración: muy corta y suave, para que no moleste al
         // recorrer la pantalla ni se solape con la voz.
         private const val HOVER_VIBRATION_MS = 28L
