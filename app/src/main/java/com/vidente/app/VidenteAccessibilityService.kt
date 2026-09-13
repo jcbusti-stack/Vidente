@@ -12,6 +12,7 @@ import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.PixelFormat
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.SoundPool
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
@@ -55,6 +56,14 @@ class VidenteAccessibilityService :
     // Vidente) -- solo lo usa el botón de prueba en Ajustes.
     private var ttsSecondary: TextToSpeech? = null
     private var ttsSecondaryReady = false
+    // Estado de habla de cada voz: para no pisar la lectura principal con un
+    // aviso puntual (se encola y se dice recién cuando termina la frase
+    // actual) y para pedir/soltar el ducking de audio de otras apps mientras
+    // cualquiera de las dos voces esté hablando.
+    private var primarySpeaking = false
+    private var secondarySpeaking = false
+    private val pendingSecondaryQueue = mutableListOf<String>()
+    private var audioFocusRequest: AudioFocusRequest? = null
     // Momento del último ACTION_USER_PRESENT; ver el comentario en speak().
     private var lastUnlockAt = 0L
     // Control de ruido del aviso de notificaciones; ver handleNotification().
@@ -255,11 +264,28 @@ class VidenteAccessibilityService :
         applyPreferences(engine)
 
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
+            override fun onStart(utteranceId: String?) {
+                primarySpeaking = true
+                onSpeechStateChanged()
+            }
 
             override fun onDone(utteranceId: String?) {
+                primarySpeaking = false
+                onSpeechStateChanged()
+                flushPendingSecondary()
                 if (utteranceId == TUTORIAL_UTTERANCE_ID) tutorialInputEnabled = true
                 if (utteranceId == CONTINUOUS_UTTERANCE_ID) onContinuousUtteranceDone()
+            }
+
+            // Una locución flushada por la siguiente (QUEUE_FLUSH, lo normal
+            // al leer rápido) para acá, no a onDone/onError: sin esto, un
+            // aviso puntual que quedó esperando (ver speakSecondary) podía
+            // quedar esperando de más si la locución en curso nunca llegaba a
+            // terminar por su cuenta.
+            override fun onStop(utteranceId: String?, interrupted: Boolean) {
+                primarySpeaking = false
+                onSpeechStateChanged()
+                flushPendingSecondary()
             }
 
             // Firma obligatoria de la clase abstracta. Reactivamos la práctica
@@ -267,6 +293,9 @@ class VidenteAccessibilityService :
             // locución falla, y cortamos la lectura continua si su locución
             // falla para no quedar en un estado a medias.
             override fun onError(utteranceId: String?) {
+                primarySpeaking = false
+                onSpeechStateChanged()
+                flushPendingSecondary()
                 if (utteranceId == TUTORIAL_UTTERANCE_ID) tutorialInputEnabled = true
                 if (utteranceId == CONTINUOUS_UTTERANCE_ID) {
                     mainHandler.post { stopContinuousReading() }
@@ -332,6 +361,27 @@ class VidenteAccessibilityService :
                 return@OnInitListener
             }
             applySecondaryPreferences(engine)
+            engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    secondarySpeaking = true
+                    onSpeechStateChanged()
+                }
+
+                override fun onDone(utteranceId: String?) {
+                    secondarySpeaking = false
+                    onSpeechStateChanged()
+                }
+
+                override fun onStop(utteranceId: String?, interrupted: Boolean) {
+                    secondarySpeaking = false
+                    onSpeechStateChanged()
+                }
+
+                override fun onError(utteranceId: String?) {
+                    secondarySpeaking = false
+                    onSpeechStateChanged()
+                }
+            })
             ttsSecondaryReady = true
         }
         ttsSecondary = if (enginePackage != null) {
@@ -359,10 +409,68 @@ class VidenteAccessibilityService :
      * llegan casi juntos (p. ej. la hora al desbloquear justo cuando la
      * batería está baja), se escuchan uno después del otro completos, sin
      * que uno corte al otro a la mitad.
+     *
+     * Si la voz principal está hablando en este momento, el aviso NO se dice
+     * ya mismo (al ser motores independientes, sonarían los dos a la vez,
+     * pisándose): se guarda en pendingSecondaryQueue y se dice recién cuando
+     * la locución principal en curso termine (ver flushPendingSecondary,
+     * llamada desde el UtteranceProgressListener de la voz principal).
      */
     private fun speakSecondary(text: String) {
         if (!ttsSecondaryReady) return
+        if (primarySpeaking) {
+            pendingSecondaryQueue.add(text)
+            return
+        }
         ttsSecondary?.speak(text, TextToSpeech.QUEUE_ADD, null, SECONDARY_UTTERANCE_ID)
+    }
+
+    private fun flushPendingSecondary() {
+        if (pendingSecondaryQueue.isEmpty()) return
+        val texts = pendingSecondaryQueue.toList()
+        pendingSecondaryQueue.clear()
+        texts.forEach { speakSecondary(it) }
+    }
+
+    /**
+     * Ducking de audio (P... nuevo): mientras cualquiera de las dos voces
+     * esté hablando, se pide audio focus transitorio con "puede bajar el
+     * volumen" (AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK) -- Android baja solo el
+     * volumen de música/otros audios mientras se sostiene, y lo devuelve al
+     * soltarlo. No hacía falta pedirlo hasta ahora porque Vidente no pedía
+     * ningún audio focus.
+     */
+    private fun onSpeechStateChanged() {
+        updateAudioDucking(primarySpeaking || secondarySpeaking)
+    }
+
+    private fun updateAudioDucking(speaking: Boolean) {
+        val audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
+        if (speaking) {
+            if (audioFocusRequest != null) return
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                .setAudioAttributes(buildAudioAttributes())
+                // Sin manejo especial: si algo de más prioridad (una llamada)
+                // se queda con el focus, Vidente sigue hablando igual y
+                // simplemente vuelve a pedirlo en la próxima locución.
+                .setOnAudioFocusChangeListener { }
+                .build()
+            try {
+                audioManager.requestAudioFocus(request)
+                audioFocusRequest = request
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudo pedir audio focus para el ducking", e)
+            }
+        } else {
+            audioFocusRequest?.let {
+                try {
+                    audioManager.abandonAudioFocusRequest(it)
+                } catch (e: Exception) {
+                    Log.w(TAG, "No se pudo soltar el audio focus", e)
+                }
+            }
+            audioFocusRequest = null
+        }
     }
 
     // P9 aviso de carga completa: solo la primera vez que se llega a 100%,
@@ -1572,6 +1680,8 @@ class VidenteAccessibilityService :
      *   Deslizar arriba y volver abajo   -> repetir la última frase (P6)
      *   Deslizar abajo y luego izquierda -> Atrás
      *   Deslizar abajo y luego derecha   -> Recientes
+     *   Deslizar arriba y luego izquierda -> cursor al inicio del campo
+     *   Deslizar arriba y luego derecha   -> cursor al final del campo
      *   Un toque durante la lectura continua -> pausa (P6)
      *
      * La clasificación de cada trazo la hace el sistema, no Vidente; no se
@@ -1637,6 +1747,19 @@ class VidenteAccessibilityService :
             GESTURE_SWIPE_LEFT -> {
                 if (isDebounced(gestureId)) return true
                 return moveInMode(forward = false)
+            }
+            // Saltar el cursor al inicio/fin del campo con foco (nuevo): sin
+            // usar hoy, y del mismo tipo de giro de 90° que abajo-y-izquierda
+            // /abajo-y-derecha (ya probados, confiables), a diferencia de una
+            // reversión en el mismo eje (izquierda-y-derecha), que ya se supo
+            // que Android no reconoce bien en esta app.
+            GESTURE_SWIPE_UP_AND_LEFT -> {
+                moveCursorToFieldBoundary(toStart = true)
+                return true
+            }
+            GESTURE_SWIPE_UP_AND_RIGHT -> {
+                moveCursorToFieldBoundary(toStart = false)
+                return true
             }
         }
 
@@ -1760,6 +1883,39 @@ class VidenteAccessibilityService :
         NavMode.LINE -> moveByGranularity(AccessibilityNodeInfo.MOVEMENT_GRANULARITY_LINE, forward)
         NavMode.PARAGRAPH -> moveByGranularity(AccessibilityNodeInfo.MOVEMENT_GRANULARITY_PARAGRAPH, forward)
         NavMode.HEADING, NavMode.LINK, NavMode.CONTROL, NavMode.FIELD -> moveToType(navMode, forward)
+    }
+
+    /**
+     * Salta el cursor al inicio o al final del campo de texto con foco de
+     * accesibilidad (gestos arriba-y-izquierda / arriba-y-derecha). Usa
+     * ACTION_SET_SELECTION (posición 0, o el largo del texto) en vez de
+     * repetir "mover por carácter" hasta el borde. El anuncio de resultado se
+     * dice por la voz secundaria y suprime el eco de cursor normal (mismo
+     * mecanismo que ya usa el eco de escritura) para no anunciarlo dos veces.
+     */
+    private fun moveCursorToFieldBoundary(toStart: Boolean): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+        root.recycle()
+        focused ?: return false
+        if (!focused.isEditable) {
+            focused.recycle()
+            return false
+        }
+        val length = focused.text?.length ?: 0
+        val index = if (toStart) 0 else length
+        val args = Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, index)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, index)
+        }
+        suppressCursorEchoUntil = SystemClock.uptimeMillis() + CURSOR_ECHO_SUPPRESS_MS
+        val done = focused.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, args)
+        focused.recycle()
+        if (done) {
+            lastCursorIndex = index
+            speakSecondary(getString(if (toStart) R.string.spoken_text_start else R.string.spoken_text_end))
+        }
+        return done
     }
 
     /**
@@ -2593,6 +2749,7 @@ class VidenteAccessibilityService :
         prevFocusedNode?.recycle()
         prevFocusedNode = null
         hideFloatingButton()
+        updateAudioDucking(speaking = false)
         tts?.stop()
         tts?.shutdown()
         ttsSecondary?.stop()
