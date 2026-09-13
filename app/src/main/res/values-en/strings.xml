@@ -27,6 +27,7 @@
     <string name="settings_title">Vidente settings</string>
     <string name="settings_section_voice">Voice and reading</string>
     <string name="settings_section_voice_secondary">Secondary voice (advanced)</string>
+    <string name="settings_section_alerts">Announcements</string>
     <string name="settings_section_typing">Typing and keyboard</string>
     <string name="settings_section_sound">Sounds and vibration</string>
     <string name="settings_section_tutorial">Welcome tutorial</string>
@@ -134,6 +135,8 @@
     <string name="settings_voice_secondary_intro">The secondary engine is configured and ready to test, but Vidente doesn\'t have any automatic announcement yet (like the time on unlock) that would use it. That\'s planned for later.</string>
     <string name="settings_engine_secondary_label">Secondary voice engine</string>
     <string name="settings_voice_secondary_label">Secondary voice</string>
+    <string name="settings_alerts_intro">One-off announcements Vidente speaks through the secondary voice, apart from normal screen reading.</string>
+    <string name="settings_announce_time_on_unlock_label">Announce the time on unlock</string>
     <string name="settings_reset_button">Reset to defaults</string>
     <string name="settings_reset_done">Defaults restored</string>
     <string name="settings_preview_text">This is how Vidente will sound when reading items on screen.</string>

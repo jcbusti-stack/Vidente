@@ -27,6 +27,7 @@
     <string name="settings_title">Ajustes de Vidente</string>
     <string name="settings_section_voice">Voz y lectura</string>
     <string name="settings_section_voice_secondary">Voz secundaria (avanzado)</string>
+    <string name="settings_section_alerts">Avisos puntuales</string>
     <string name="settings_section_typing">Escritura y teclado</string>
     <string name="settings_section_sound">Sonidos y vibración</string>
     <string name="settings_section_tutorial">Tutorial de bienvenida</string>
@@ -139,6 +140,8 @@
     <string name="settings_voice_secondary_intro">El motor secundario queda configurado y disponible para probarse, pero por ahora Vidente no tiene ningún aviso automático (como la hora al desbloquear) que lo use todavía. Eso queda para más adelante.</string>
     <string name="settings_engine_secondary_label">Motor de voz secundario</string>
     <string name="settings_voice_secondary_label">Voz secundaria</string>
+    <string name="settings_alerts_intro">Avisos puntuales que Vidente dice por la voz secundaria, aparte de la lectura normal de pantalla.</string>
+    <string name="settings_announce_time_on_unlock_label">Anunciar la hora al desbloquear</string>
     <string name="settings_reset_button">Restablecer valores</string>
     <string name="settings_reset_done">Valores restablecidos</string>
     <string name="settings_preview_text">Así sonará Vidente al leer los elementos en pantalla.</string>

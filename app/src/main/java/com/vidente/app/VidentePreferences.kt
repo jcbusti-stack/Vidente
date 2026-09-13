@@ -21,6 +21,9 @@ object VidentePreferences {
     // plano" quedó activado: el propio usuario lo marca a mano en el
     // asistente de configuración después de activarlo.
     const val KEY_XIAOMI_AUTOSTART_CONFIRMED = "xiaomi_autostart_confirmed"
+    // P9 avisos puntuales: hora al desbloquear, por la voz secundaria.
+    const val KEY_ANNOUNCE_TIME_ON_UNLOCK = "announce_time_on_unlock"
+    const val DEFAULT_ANNOUNCE_TIME_ON_UNLOCK = true
     const val KEY_AUDIO_OUTPUT = "audio_output"
 
     // Ruta de audio del TTS. "media" usa USAGE_MEDIA, que sigue la salida
@@ -146,6 +149,13 @@ object VidentePreferences {
 
     fun setTutorialDone(context: Context, done: Boolean) {
         prefs(context).edit().putBoolean(KEY_TUTORIAL_DONE, done).apply()
+    }
+
+    fun getAnnounceTimeOnUnlock(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_TIME_ON_UNLOCK, DEFAULT_ANNOUNCE_TIME_ON_UNLOCK)
+
+    fun setAnnounceTimeOnUnlock(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_TIME_ON_UNLOCK, enabled).apply()
     }
 
     fun isXiaomiAutostartConfirmed(context: Context): Boolean =

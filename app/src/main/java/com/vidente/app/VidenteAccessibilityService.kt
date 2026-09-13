@@ -2,7 +2,10 @@ package com.vidente.app
 
 import android.Manifest
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -32,6 +35,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.InputMethodManager
 import androidx.core.content.ContextCompat
+import java.util.Date
 import java.util.Locale
 
 class VidenteAccessibilityService :
@@ -332,15 +336,28 @@ class VidenteAccessibilityService :
         voice?.let { engine.voice = it }
     }
 
-    /**
-     * Habla por el motor secundario. Todavía sin ningún llamador automático
-     * (ver comentario en ttsSecondary): queda lista para cuando exista un
-     * aviso puntual real que deba usarla.
-     */
-    @Suppress("unused")
+    /** Habla por el motor secundario (avisos puntuales: hora al desbloquear, etc.). */
     private fun speakSecondary(text: String) {
         if (!ttsSecondaryReady) return
         ttsSecondary?.speak(text, TextToSpeech.QUEUE_FLUSH, null, SECONDARY_UTTERANCE_ID)
+    }
+
+    /**
+     * P9 primer aviso puntual: la hora al desbloquear el teléfono, por la voz
+     * secundaria. ACTION_USER_PRESENT es el evento oficial de Android para
+     * "el usuario acaba de desbloquear" (documentación pública, no algo
+     * deducido de otra app). El formato de hora usa la configuración del
+     * propio teléfono (12/24 horas, idioma), con la función de Android para
+     * eso en vez de armarlo a mano.
+     */
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != Intent.ACTION_USER_PRESENT) return
+            if (!VidentePreferences.getAnnounceTimeOnUnlock(this@VidenteAccessibilityService)) return
+            val formatted = android.text.format.DateFormat.getTimeFormat(this@VidenteAccessibilityService)
+                .format(Date())
+            speakSecondary(formatted)
+        }
     }
 
     // Recursos con el idioma elegido en Ajustes; null = seguir el del sistema.
@@ -409,6 +426,15 @@ class VidenteAccessibilityService :
         refreshScrollFeedback()
         ensureSoundPool()
         showFloatingButton()
+        // onServiceConnected puede volver a llamarse si el sistema reconecta
+        // el servicio; se desregistra primero (sin fallar si no lo estaba)
+        // para no quedar registrado dos veces.
+        try {
+            unregisterReceiver(unlockReceiver)
+        } catch (e: Exception) {
+            // No estaba registrado todavía: es lo esperado la primera vez.
+        }
+        registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT))
 
         // Tutorial de bienvenida la primera vez que se activa el servicio.
         // Se marca como visto al arrancarlo para no repetirlo en cada
@@ -2247,6 +2273,11 @@ class VidenteAccessibilityService :
     }
 
     override fun onDestroy() {
+        try {
+            unregisterReceiver(unlockReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "unlockReceiver ya no estaba registrado", e)
+        }
         VidentePreferences.prefs(this).unregisterOnSharedPreferenceChangeListener(this)
         mainHandler.removeCallbacksAndMessages(null)
         releaseSoundPool()

@@ -94,6 +94,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
                 titleRes = R.string.settings_section_voice_secondary
                 layoutRes = R.layout.section_voice_secondary
             }
+            SECTION_ALERTS -> { titleRes = R.string.settings_section_alerts; layoutRes = R.layout.section_alerts }
             SECTION_TYPING -> { titleRes = R.string.settings_section_typing; layoutRes = R.layout.section_typing }
             SECTION_SOUND -> { titleRes = R.string.settings_section_sound; layoutRes = R.layout.section_sound }
             SECTION_TUTORIAL -> { titleRes = R.string.settings_section_tutorial; layoutRes = R.layout.section_tutorial }
@@ -107,6 +108,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         when (section) {
             SECTION_VOICE -> setUpVoiceSection()
             SECTION_VOICE_SECONDARY -> setUpVoiceSecondarySection()
+            SECTION_ALERTS -> setUpAlertsSection()
             SECTION_TYPING -> setUpTypingSection()
             SECTION_SOUND -> setUpSoundSection()
             SECTION_TUTORIAL -> setUpTutorialSection()
@@ -427,6 +429,16 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         engine.speak(getString(R.string.settings_preview_text), TextToSpeech.QUEUE_FLUSH, null, PREVIEW_SECONDARY_UTTERANCE_ID)
     }
 
+    // ---- Avisos puntuales ----
+
+    private fun setUpAlertsSection() {
+        val switch = findViewById<Switch>(R.id.switchAnnounceTimeOnUnlock)
+        switch.isChecked = VidentePreferences.getAnnounceTimeOnUnlock(this)
+        switch.setOnCheckedChangeListener { _, isChecked ->
+            VidentePreferences.setAnnounceTimeOnUnlock(this, isChecked)
+        }
+    }
+
     // ---- Escritura y teclado ----
 
     private fun setUpTypingSection() {
@@ -549,6 +561,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         VidentePreferences.setEnginePackage(this, null)
         VidentePreferences.setSecondaryEnginePackage(this, null)
         VidentePreferences.setSecondaryVoiceName(this, null)
+        VidentePreferences.setAnnounceTimeOnUnlock(this, VidentePreferences.DEFAULT_ANNOUNCE_TIME_ON_UNLOCK)
         VidentePreferences.setAudioOutput(this, VidentePreferences.DEFAULT_AUDIO_OUTPUT)
         VidentePreferences.setScrollFeedback(this, VidentePreferences.DEFAULT_SCROLL_FEEDBACK)
         VidentePreferences.setTypingEcho(this, VidentePreferences.DEFAULT_TYPING_ECHO)
@@ -570,6 +583,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         const val EXTRA_REQUEST_MIC = "request_mic"
         const val SECTION_VOICE = "voice"
         const val SECTION_VOICE_SECONDARY = "voice_secondary"
+        const val SECTION_ALERTS = "alerts"
         const val SECTION_TYPING = "typing"
         const val SECTION_SOUND = "sound"
         const val SECTION_TUTORIAL = "tutorial"
