@@ -1242,12 +1242,12 @@ class VidenteAccessibilityService :
         val className = node.className?.toString().orEmpty()
         when {
             stateDescription != null -> states.add(stateDescription)
-            // Opción de un grupo (RadioButton): solo se anuncia la elegida
-            // ("marcada"); las demás no dicen nada, para no repetir
-            // "activado/desactivado" en cada una de la lista.
-            className.endsWith("RadioButton") -> {
-                if (node.isChecked) states.add(getString(R.string.spoken_state_checked))
-            }
+            // Opción de un grupo (RadioButton): "marcada" o "sin marcar",
+            // nunca "activado/desactivado" (esas palabras ya son el nombre
+            // de la opción cuando son del estilo "Activado"/"Desactivado").
+            className.endsWith("RadioButton") -> states.add(
+                getString(if (node.isChecked) R.string.spoken_state_checked else R.string.spoken_state_unchecked)
+            )
             node.isCheckable -> states.add(
                 getString(if (node.isChecked) R.string.spoken_state_on else R.string.spoken_state_off)
             )
@@ -1487,8 +1487,18 @@ class VidenteAccessibilityService :
                 cycleNavMode()
                 return true
             }
-            GESTURE_SWIPE_RIGHT -> return moveInMode(forward = true)
-            GESTURE_SWIPE_LEFT -> return moveInMode(forward = false)
+            // Mismo resguardo que los demás gestos: si Android llega a
+            // reportar un solo deslizamiento como dos gestos casi juntos, no
+            // se salta dos elementos de una (se sentía como que el foco "se
+            // adelantaba" solo).
+            GESTURE_SWIPE_RIGHT -> {
+                if (isDebounced(gestureId)) return true
+                return moveInMode(forward = true)
+            }
+            GESTURE_SWIPE_LEFT -> {
+                if (isDebounced(gestureId)) return true
+                return moveInMode(forward = false)
+            }
         }
 
         val (action, spokenRes) = when (gestureId) {
@@ -2429,7 +2439,7 @@ class VidenteAccessibilityService :
         // Vibración de exploración: muy corta y suave, para que no moleste al
         // recorrer la pantalla ni se solape con la voz.
         private const val HOVER_VIBRATION_MS = 28L
-        private const val HOVER_VIBRATION_AMPLITUDE = 225  // 1..255
+        private const val HOVER_VIBRATION_AMPLITUDE = 130  // 1..255
         // Un mismo texto se puede repetir pasado este tiempo: al escribir
         // rápido, tocar dos veces la misma tecla debe anunciarse dos veces.
         private const val REPEAT_SPEECH_AFTER_MS = 350L

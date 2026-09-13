@@ -56,6 +56,7 @@
     <string name="spoken_state_on">activado</string>
     <string name="spoken_state_off">desactivado</string>
     <string name="spoken_state_checked">marcada</string>
+    <string name="spoken_state_unchecked">sin marcar</string>
     <string name="spoken_state_selected">seleccionado</string>
     <string name="spoken_state_disabled">no disponible</string>
 
