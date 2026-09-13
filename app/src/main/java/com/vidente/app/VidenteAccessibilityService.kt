@@ -51,6 +51,8 @@ class VidenteAccessibilityService :
     // Vidente) -- solo lo usa el botón de prueba en Ajustes.
     private var ttsSecondary: TextToSpeech? = null
     private var ttsSecondaryReady = false
+    // Momento del último ACTION_USER_PRESENT; ver el comentario en speak().
+    private var lastUnlockAt = 0L
     private var lastSpoken: String? = null
     private var lastSpokenAt = 0L
     private var pendingText: String? = null
@@ -353,6 +355,11 @@ class VidenteAccessibilityService :
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != Intent.ACTION_USER_PRESENT) return
+            // Se anota el momento SIEMPRE (aunque el aviso de hora esté
+            // desactivado): es lo que usa speak() para saber que se acaba de
+            // destrabar el teléfono y no pisar el aviso de hora si estuviera
+            // activado en otro momento. No tiene costo si no se usa.
+            lastUnlockAt = SystemClock.uptimeMillis()
             if (!VidentePreferences.getAnnounceTimeOnUnlock(this@VidenteAccessibilityService)) return
             val formatted = android.text.format.DateFormat.getTimeFormat(this@VidenteAccessibilityService)
                 .format(Date())
@@ -1188,7 +1195,27 @@ class VidenteAccessibilityService :
         return states
     }
 
+    /**
+     * Justo después de destrabar el teléfono, el aviso de hora (motor
+     * secundario, disparado por ACTION_USER_PRESENT) y el primer anuncio
+     * normal de pantalla (motor principal, por foco o cambio de ventana)
+     * compiten: son dos motores de voz separados, y el aviso de hora puede
+     * tardar más en llegar (el sistema está ocupado despertando la pantalla
+     * justo en ese momento), así que a veces se escucha después en vez de
+     * antes. Para no mezclar los dos, la PRIMERA locución normal tras
+     * destrabar se retrasa un poco (solo esa, no las siguientes) y le da
+     * tiempo a la hora a escucharse primero.
+     */
     private fun speak(text: String) {
+        val sinceUnlock = SystemClock.uptimeMillis() - lastUnlockAt
+        if (sinceUnlock in 0 until UNLOCK_ANNOUNCE_GRACE_MS) {
+            lastUnlockAt = 0L
+            mainHandler.postDelayed(
+                { tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID) },
+                UNLOCK_ANNOUNCE_DELAY_MS
+            )
+            return
+        }
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
     }
 
@@ -2299,6 +2326,11 @@ class VidenteAccessibilityService :
         private const val TUTORIAL_UTTERANCE_ID = "vidente_tutorial"
         private const val CONTINUOUS_UTTERANCE_ID = "vidente_continuo"
         private const val SECONDARY_UTTERANCE_ID = "vidente_secundario"
+        // Ver el comentario en speak(): solo la primera locución normal
+        // dentro de este margen tras destrabar se retrasa, para darle
+        // tiempo al aviso de hora (motor secundario) a escucharse primero.
+        private const val UNLOCK_ANNOUNCE_GRACE_MS = 1000L
+        private const val UNLOCK_ANNOUNCE_DELAY_MS = 600L
         private const val FLOATING_BUTTON_MARGIN_PX = 24
         private const val MAX_DEPTH = 12
         private const val MAX_LABEL_DEPTH = 3
