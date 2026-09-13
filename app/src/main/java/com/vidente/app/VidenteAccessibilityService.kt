@@ -1101,6 +1101,12 @@ class VidenteAccessibilityService :
             lastHoverAt = now
             interactedSinceScreenChange = true
             vibrateTick()
+            // DIAGNÓSTICO TEMPORAL (bug 2): el toque directo sí encuentra este
+            // nodo (llegamos hasta acá), así que compara contra lo que ve
+            // treeSuccessor parado exactamente en él -- padre, índice entre
+            // sus hermanos, y cuál es el siguiente hermano real. Sacar esta
+            // llamada y speakHoverTraversalDiagnostic() una vez cerrado el bug.
+            speakHoverTraversalDiagnostic(node)
         }
 
         // Vidente gestiona el foco de accesibilidad: al leer un elemento por
@@ -2244,6 +2250,48 @@ class VidenteAccessibilityService :
         }
         t.recycle()
         return done
+    }
+
+    /**
+     * DIAGNÓSTICO TEMPORAL (bug 2 -- swipe se salta un nodo que el toque
+     * directo sí encuentra). Se llama desde handleFocusEvent en cada hover
+     * (toque directo), que ya sabemos que SÍ ubica el nodo correcto. Dice por
+     * voz secundaria qué ve indexInParent/treeSuccessor parado en ese mismo
+     * nodo: si no encuentra su índice entre los hijos de su padre (idx < 0),
+     * ahí está el hueco -- treeSuccessor se queda sin poder ubicarlo entre
+     * sus hermanos aunque el nodo exista y sea válido. Sacar esta función
+     * (y su llamada en handleFocusEvent) una vez cerrado el bug.
+     */
+    @Suppress("DEPRECATION")
+    private fun speakHoverTraversalDiagnostic(node: AccessibilityNodeInfo) {
+        val parent = try { node.parent } catch (e: Exception) { null }
+        if (parent == null) {
+            speakSecondary("Diag: este nodo no tiene padre.")
+            return
+        }
+        val idx = indexInParent(parent, node)
+        if (idx < 0) {
+            speakSecondary(
+                "Diag: índice no encontrado entre los ${parent.childCount} hijos del padre. " +
+                    "Ahí está el hueco."
+            )
+            parent.recycle()
+            return
+        }
+        val nextChild = parent.getChild(idx + 1)
+        val nextDesc = if (nextChild == null) {
+            "ninguno"
+        } else {
+            val cls = nextChild.className?.toString()?.substringAfterLast('.') ?: "desconocido"
+            val lbl = ownLabel(nextChild) ?: "sin etiqueta"
+            val nav = isNavigable(nextChild)
+            nextChild.recycle()
+            "$cls, $lbl, navegable ${if (nav) "sí" else "no"}"
+        }
+        speakSecondary(
+            "Diag: índice $idx de ${parent.childCount} hijos. Siguiente hermano real: $nextDesc."
+        )
+        parent.recycle()
     }
 
     /**
