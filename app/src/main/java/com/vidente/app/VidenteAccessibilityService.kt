@@ -2186,7 +2186,7 @@ class VidenteAccessibilityService :
                         parent.recycle(); current.recycle(); return null
                     }
                     val sib = parent.getChild(i) ?: continue
-                    if (isNavigable(sib)) {
+                    if (isNavigableDebug(sib)) {
                         parent.recycle(); current.recycle(); return sib
                     }
                     val inner = firstNavigableInSubtree(sib, includeSelf = false, forward = forward)
@@ -2218,7 +2218,7 @@ class VidenteAccessibilityService :
     ): AccessibilityNodeInfo? {
         if (treeWalkBudget-- <= 0) return null
 
-        if (forward && includeSelf && isNavigable(node)) return AccessibilityNodeInfo.obtain(node)
+        if (forward && includeSelf && isNavigableDebug(node)) return AccessibilityNodeInfo.obtain(node)
 
         val range = if (forward) 0 until node.childCount else (node.childCount - 1) downTo 0
         for (i in range) {
@@ -2228,7 +2228,7 @@ class VidenteAccessibilityService :
             if (r != null) return r
         }
 
-        if (!forward && includeSelf && isNavigable(node)) return AccessibilityNodeInfo.obtain(node)
+        if (!forward && includeSelf && isNavigableDebug(node)) return AccessibilityNodeInfo.obtain(node)
         return null
     }
 
@@ -2276,6 +2276,38 @@ class VidenteAccessibilityService :
         if (!interactive && ownLabel(node) == null) return false
         if (!interactive && !node.isEnabled) return false
         return true
+    }
+
+    /**
+     * DIAGNÓSTICO TEMPORAL (bug 2 -- texto no clicable salteado al deslizar
+     * elemento por elemento). Habla por la voz secundaria cada nodo que el
+     * recorrido descarta como próxima parada, con lo que Vidente ve de él,
+     * para confirmar en el teléfono por qué un encabezado de sección (sin
+     * clic, pero con texto) queda afuera. Sacar este bloque y sus llamadas
+     * (buscar isNavigableDebug) una vez confirmada la causa real.
+     */
+    private fun debugNodeDescription(node: AccessibilityNodeInfo): String {
+        val cls = node.className?.toString()?.substringAfterLast('.') ?: "?"
+        fun b(v: Boolean) = if (v) "sí" else "no"
+        return "Salteado: $cls." +
+            " Visible ${b(node.isVisibleToUser)}." +
+            " Clicable ${b(node.isClickable)}." +
+            " Focusable ${b(node.isFocusable)}." +
+            " Chequeable ${b(node.isCheckable)}." +
+            " Editable ${b(node.isEditable)}." +
+            " Habilitado ${b(node.isEnabled)}." +
+            " Con texto ${b(!node.text.isNullOrBlank())}." +
+            " Con descripción ${b(!node.contentDescription.isNullOrBlank())}."
+    }
+
+    private fun isNavigableDebug(node: AccessibilityNodeInfo): Boolean {
+        val ok = isNavigable(node)
+        // Solo se habla si el nodo descartado tiene texto o descripción: un
+        // simple contenedor sin nada que decir no es lo que se está
+        // investigando y llenaría de ruido cada deslizamiento.
+        val hasSomethingToSay = !node.text.isNullOrBlank() || !node.contentDescription.isNullOrBlank()
+        if (!ok && hasSomethingToSay) speakSecondary(debugNodeDescription(node))
+        return ok
     }
 
     /**

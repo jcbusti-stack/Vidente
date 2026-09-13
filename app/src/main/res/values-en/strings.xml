@@ -174,7 +174,7 @@
     <string name="settings_typing_echo_words">Words only</string>
     <string name="settings_typing_echo_none">Off</string>
     <string name="settings_keyboard_write_mode_label">Keyboard writing mode</string>
-    <string name="settings_keyboard_write_mode_double_tap">Double tap (current)</string>
+    <string name="settings_keyboard_write_mode_double_tap">Double tap</string>
     <string name="settings_keyboard_write_mode_slide_release">Slide and release</string>
     <string name="settings_cursor_announce_label">Cursor position announcement</string>
     <string name="settings_cursor_announce_on">On</string>
