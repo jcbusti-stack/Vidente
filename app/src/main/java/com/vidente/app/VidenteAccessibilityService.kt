@@ -338,32 +338,50 @@ class VidenteAccessibilityService :
         voice?.let { engine.voice = it }
     }
 
-    /** Habla por el motor secundario (avisos puntuales: hora al desbloquear, etc.). */
+    /**
+     * Habla por el motor secundario (avisos puntuales: hora al desbloquear,
+     * batería baja, etc.). QUEUE_ADD, no QUEUE_FLUSH: si dos avisos puntuales
+     * llegan casi juntos (p. ej. la hora al desbloquear justo cuando la
+     * batería está baja), se escuchan uno después del otro completos, sin
+     * que uno corte al otro a la mitad.
+     */
     private fun speakSecondary(text: String) {
         if (!ttsSecondaryReady) return
-        ttsSecondary?.speak(text, TextToSpeech.QUEUE_FLUSH, null, SECONDARY_UTTERANCE_ID)
+        ttsSecondary?.speak(text, TextToSpeech.QUEUE_ADD, null, SECONDARY_UTTERANCE_ID)
     }
 
     /**
-     * P9 primer aviso puntual: la hora al desbloquear el teléfono, por la voz
-     * secundaria. ACTION_USER_PRESENT es el evento oficial de Android para
-     * "el usuario acaba de desbloquear" (documentación pública, no algo
-     * deducido de otra app). El formato de hora usa la configuración del
-     * propio teléfono (12/24 horas, idioma), con la función de Android para
-     * eso en vez de armarlo a mano.
+     * P9 avisos puntuales, por la voz secundaria. Cada uno usa un evento
+     * oficial de Android (documentación pública, no algo deducido de otra
+     * app):
+     * - ACTION_USER_PRESENT: el usuario acaba de desbloquear el teléfono. El
+     *   formato de hora usa la configuración del propio teléfono (12/24
+     *   horas, idioma), con la función de Android para eso.
+     * - ACTION_BATTERY_LOW: el propio Android cruzó su umbral de batería
+     *   baja (el mismo que dispara su diálogo nativo) -- un solo aviso por
+     *   cada vez que se cruza, sin que Vidente tenga que vigilar el
+     *   porcentaje ni evitar avisos repetidos por su cuenta.
      */
-    private val unlockReceiver = object : BroadcastReceiver() {
+    private val systemEventReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != Intent.ACTION_USER_PRESENT) return
-            // Se anota el momento SIEMPRE (aunque el aviso de hora esté
-            // desactivado): es lo que usa speak() para saber que se acaba de
-            // destrabar el teléfono y no pisar el aviso de hora si estuviera
-            // activado en otro momento. No tiene costo si no se usa.
-            lastUnlockAt = SystemClock.uptimeMillis()
-            if (!VidentePreferences.getAnnounceTimeOnUnlock(this@VidenteAccessibilityService)) return
-            val formatted = android.text.format.DateFormat.getTimeFormat(this@VidenteAccessibilityService)
-                .format(Date())
-            speakSecondary(formatted)
+            when (intent.action) {
+                Intent.ACTION_USER_PRESENT -> {
+                    // Se anota el momento SIEMPRE (aunque el aviso de hora
+                    // esté desactivado): es lo que usa speak() para no pisar
+                    // el aviso de hora si estuviera activado. Sin costo si
+                    // no se usa.
+                    lastUnlockAt = SystemClock.uptimeMillis()
+                    if (!VidentePreferences.getAnnounceTimeOnUnlock(this@VidenteAccessibilityService)) return
+                    val formatted =
+                        android.text.format.DateFormat.getTimeFormat(this@VidenteAccessibilityService)
+                            .format(Date())
+                    speakSecondary(formatted)
+                }
+                Intent.ACTION_BATTERY_LOW -> {
+                    if (!VidentePreferences.getAnnounceLowBattery(this@VidenteAccessibilityService)) return
+                    speakSecondary(getString(R.string.spoken_battery_low))
+                }
+            }
         }
     }
 
@@ -437,11 +455,17 @@ class VidenteAccessibilityService :
         // el servicio; se desregistra primero (sin fallar si no lo estaba)
         // para no quedar registrado dos veces.
         try {
-            unregisterReceiver(unlockReceiver)
+            unregisterReceiver(systemEventReceiver)
         } catch (e: Exception) {
             // No estaba registrado todavía: es lo esperado la primera vez.
         }
-        registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT))
+        registerReceiver(
+            systemEventReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_USER_PRESENT)
+                addAction(Intent.ACTION_BATTERY_LOW)
+            }
+        )
 
         // Tutorial de bienvenida la primera vez que se activa el servicio.
         // Se marca como visto al arrancarlo para no repetirlo en cada
@@ -2301,9 +2325,9 @@ class VidenteAccessibilityService :
 
     override fun onDestroy() {
         try {
-            unregisterReceiver(unlockReceiver)
+            unregisterReceiver(systemEventReceiver)
         } catch (e: Exception) {
-            Log.w(TAG, "unlockReceiver ya no estaba registrado", e)
+            Log.w(TAG, "systemEventReceiver ya no estaba registrado", e)
         }
         VidentePreferences.prefs(this).unregisterOnSharedPreferenceChangeListener(this)
         mainHandler.removeCallbacksAndMessages(null)

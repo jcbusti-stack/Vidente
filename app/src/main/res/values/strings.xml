@@ -142,6 +142,8 @@
     <string name="settings_voice_secondary_label">Voz secundaria</string>
     <string name="settings_alerts_intro">Avisos puntuales que Vidente dice por la voz secundaria, aparte de la lectura normal de pantalla.</string>
     <string name="settings_announce_time_on_unlock_label">Anunciar la hora al desbloquear</string>
+    <string name="settings_announce_low_battery_label">Anunciar batería baja</string>
+    <string name="spoken_battery_low">Batería baja</string>
     <string name="settings_reset_button">Restablecer valores</string>
     <string name="settings_reset_done">Valores restablecidos</string>
     <string name="settings_preview_text">Así sonará Vidente al leer los elementos en pantalla.</string>

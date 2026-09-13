@@ -24,6 +24,8 @@ object VidentePreferences {
     // P9 avisos puntuales: hora al desbloquear, por la voz secundaria.
     const val KEY_ANNOUNCE_TIME_ON_UNLOCK = "announce_time_on_unlock"
     const val DEFAULT_ANNOUNCE_TIME_ON_UNLOCK = true
+    const val KEY_ANNOUNCE_LOW_BATTERY = "announce_low_battery"
+    const val DEFAULT_ANNOUNCE_LOW_BATTERY = true
     const val KEY_AUDIO_OUTPUT = "audio_output"
 
     // Ruta de audio del TTS. "media" usa USAGE_MEDIA, que sigue la salida
@@ -156,6 +158,13 @@ object VidentePreferences {
 
     fun setAnnounceTimeOnUnlock(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_ANNOUNCE_TIME_ON_UNLOCK, enabled).apply()
+    }
+
+    fun getAnnounceLowBattery(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_LOW_BATTERY, DEFAULT_ANNOUNCE_LOW_BATTERY)
+
+    fun setAnnounceLowBattery(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_LOW_BATTERY, enabled).apply()
     }
 
     fun isXiaomiAutostartConfirmed(context: Context): Boolean =

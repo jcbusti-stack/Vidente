@@ -432,10 +432,16 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     // ---- Avisos puntuales ----
 
     private fun setUpAlertsSection() {
-        val switch = findViewById<Switch>(R.id.switchAnnounceTimeOnUnlock)
-        switch.isChecked = VidentePreferences.getAnnounceTimeOnUnlock(this)
-        switch.setOnCheckedChangeListener { _, isChecked ->
+        val switchUnlock = findViewById<Switch>(R.id.switchAnnounceTimeOnUnlock)
+        switchUnlock.isChecked = VidentePreferences.getAnnounceTimeOnUnlock(this)
+        switchUnlock.setOnCheckedChangeListener { _, isChecked ->
             VidentePreferences.setAnnounceTimeOnUnlock(this, isChecked)
+        }
+
+        val switchBattery = findViewById<Switch>(R.id.switchAnnounceLowBattery)
+        switchBattery.isChecked = VidentePreferences.getAnnounceLowBattery(this)
+        switchBattery.setOnCheckedChangeListener { _, isChecked ->
+            VidentePreferences.setAnnounceLowBattery(this, isChecked)
         }
     }
 
@@ -562,6 +568,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         VidentePreferences.setSecondaryEnginePackage(this, null)
         VidentePreferences.setSecondaryVoiceName(this, null)
         VidentePreferences.setAnnounceTimeOnUnlock(this, VidentePreferences.DEFAULT_ANNOUNCE_TIME_ON_UNLOCK)
+        VidentePreferences.setAnnounceLowBattery(this, VidentePreferences.DEFAULT_ANNOUNCE_LOW_BATTERY)
         VidentePreferences.setAudioOutput(this, VidentePreferences.DEFAULT_AUDIO_OUTPUT)
         VidentePreferences.setScrollFeedback(this, VidentePreferences.DEFAULT_SCROLL_FEEDBACK)
         VidentePreferences.setTypingEcho(this, VidentePreferences.DEFAULT_TYPING_ECHO)
