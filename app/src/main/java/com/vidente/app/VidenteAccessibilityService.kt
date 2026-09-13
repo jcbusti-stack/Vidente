@@ -160,6 +160,12 @@ class VidenteAccessibilityService :
     private var pendingTitleRunnable: Runnable? = null
     private var pendingKeyboardRunnable: Runnable? = null
     private var pendingHoverSpeakRunnable: Runnable? = null
+    // Eco de borrado agrupado por pausa: mientras se mantiene la tecla de
+    // borrar presionada, se acumula lo borrado en vez de anunciarlo carácter
+    // por carácter; se anuncia recién cuando pasa DELETE_ECHO_DEBOUNCE_MS sin
+    // un nuevo borrado (tecla soltada, o una pausa natural del repetido).
+    private var pendingDeleteText: String = ""
+    private var pendingDeleteRunnable: Runnable? = null
     private var pendingScrollRunnable: Runnable? = null
     private var lastScrollBoundary: String? = null      // "fin" | "inicio" | null
     private var lastSpokenScrollPos: String? = null     // dedupe del porcentaje hablado
@@ -736,6 +742,11 @@ class VidenteAccessibilityService :
         // debe sonar en la nueva.
         pendingHoverSpeakRunnable?.let { mainHandler.removeCallbacks(it) }
         pendingHoverSpeakRunnable = null
+        // Un borrado agrupado pendiente de la pantalla anterior no debe
+        // anunciarse (ni el texto acumulado tiene sentido) en la nueva.
+        pendingDeleteRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingDeleteRunnable = null
+        pendingDeleteText = ""
     }
 
     /**
@@ -1824,11 +1835,16 @@ class VidenteAccessibilityService :
         // fuera el texto propio -- convención de AOSP para que el lector de
         // pantalla anuncie el hint en un campo vacío. Sin este ajuste, el
         // diff de abajo tomaba ese hint como "texto agregado" y lo leía en
-        // vez de anunciar la letra que se acababa de borrar.
+        // vez de anunciar la letra que se acababa de borrar. Se usa
+        // isShowingHintText() (pensada justo para este caso) en vez de
+        // comparar solo contra hintText: en campos de Material Design
+        // (TextInputLayout) el texto que se muestra al quedar vacío no
+        // siempre coincide con el hintText propio del nodo del EditText.
         val source = event.source
+        val showingHint = source?.isShowingHintText == true
         val hint = source?.hintText?.toString()
         source?.recycle()
-        if (hint != null && now == hint && before.isNotEmpty()) now = ""
+        if (before.isNotEmpty() && (showingHint || (hint != null && now == hint))) now = ""
 
         // Prefijo común.
         var p = 0
@@ -1852,19 +1868,18 @@ class VidenteAccessibilityService :
         val echoWords = typingEcho == VidentePreferences.TYPING_ECHO_WORDS ||
             typingEcho == VidentePreferences.TYPING_ECHO_CHARS_WORDS
 
-        // Borrado puro.
+        // Borrado puro: se agrupa por pausa (ver scheduleDeleteEcho) en vez
+        // de anunciarse al toque, para no leer carácter por carácter
+        // mientras se mantiene la tecla de borrar presionada.
         if (addedText.isEmpty() && removedText.isNotEmpty()) {
-            val space = getString(R.string.spoken_space)
-            val what = when {
-                removedText.length > TYPING_ECHO_MAX_CHARS ->
-                    getString(R.string.spoken_chars_count, removedText.length)
-                removedText.isBlank() -> space
-                else -> removedText.trim().ifBlank { space }
-            }
-            speak(getString(R.string.spoken_deleted, what))
+            scheduleDeleteEcho(removedText)
             return
         }
         if (addedText.isEmpty()) return
+
+        // Se retomó la escritura: si había un borrado agrupado sin anunciar
+        // todavía, se dice ya mismo para no perder el orden cronológico.
+        flushPendingDeleteEcho()
 
         // Carácter suelto, o trozo insertado (pegado / sugerencia del teclado).
         if (echoChars) {
@@ -1884,6 +1899,41 @@ class VidenteAccessibilityService :
             val word = now.substring(start, end)
             if (word.isNotBlank()) speak(word)
         }
+    }
+
+    /**
+     * Acumula texto borrado y reinicia el temporizador de anuncio: al
+     * mantener la tecla de borrar presionada, el sistema repite el borrado
+     * varias veces por segundo, así que se agrupa por pausa en vez de
+     * anunciar cada carácter suelto. Se anuncia apenas pasan
+     * DELETE_ECHO_DEBOUNCE_MS sin un nuevo borrado -- sea porque se soltó la
+     * tecla o por una pausa natural del repetido -- sin esperar a que
+     * termine el gesto.
+     */
+    private fun scheduleDeleteEcho(removedText: String) {
+        // El borrado avanza de derecha a izquierda: lo nuevo se antepone
+        // para reconstruir la palabra en el orden en que se escribió.
+        pendingDeleteText = removedText + pendingDeleteText
+        pendingDeleteRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable { flushPendingDeleteEcho() }
+        pendingDeleteRunnable = r
+        mainHandler.postDelayed(r, DELETE_ECHO_DEBOUNCE_MS)
+    }
+
+    private fun flushPendingDeleteEcho() {
+        pendingDeleteRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingDeleteRunnable = null
+        val removedText = pendingDeleteText
+        if (removedText.isEmpty()) return
+        pendingDeleteText = ""
+        val space = getString(R.string.spoken_space)
+        val what = when {
+            removedText.length > TYPING_ECHO_MAX_CHARS ->
+                getString(R.string.spoken_chars_count, removedText.length)
+            removedText.isBlank() -> space
+            else -> removedText.trim().ifBlank { space }
+        }
+        speak(getString(R.string.spoken_deleted, what))
     }
 
     /**
@@ -2562,6 +2612,7 @@ class VidenteAccessibilityService :
         // Ver el comentario en handleFocusEvent(): tiempo que el dedo debe
         // "asentarse" en un elemento antes de anunciarlo al explorar.
         private const val HOVER_SPEAK_DEBOUNCE_MS = 90L
+        private const val DELETE_ECHO_DEBOUNCE_MS = 200L
         // Vibración de exploración: muy corta y suave, para que no moleste al
         // recorrer la pantalla ni se solape con la voz.
         private const val HOVER_VIBRATION_MS = 28L
