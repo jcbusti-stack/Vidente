@@ -70,12 +70,31 @@
             android:text="@string/settings_keyboard_write_mode_slide_release" />
     </RadioGroup>
 
-    <Switch
-        android:id="@+id/switchCursorAnnounce"
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="@string/settings_cursor_announce_label"
+        android:textSize="16sp" />
+
+    <RadioGroup
+        android:id="@+id/radioGroupCursorAnnounce"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="24dp"
-        android:text="@string/settings_cursor_announce_label"
-        android:textSize="16sp" />
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioCursorAnnounceOn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_cursor_announce_on" />
+
+        <RadioButton
+            android:id="@+id/radioCursorAnnounceOff"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_cursor_announce_off" />
+    </RadioGroup>
 
 </LinearLayout>

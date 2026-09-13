@@ -18,7 +18,6 @@ import android.widget.SeekBar
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.Spinner
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -70,7 +69,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     private var radioGroupScrollFeedback: RadioGroup? = null
     private var radioGroupTypingEcho: RadioGroup? = null
     private var radioGroupKeyboardWriteMode: RadioGroup? = null
-    private var switchCursorAnnounce: Switch? = null
+    private var radioGroupCursorAnnounce: RadioGroup? = null
 
     private val languageValues = listOf(
         VidentePreferences.APP_LANGUAGE_SYSTEM, "es", "en", "fr", "de", "pt", "it"
@@ -432,23 +431,37 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     // ---- Avisos puntuales ----
 
     private fun setUpAlertsSection() {
-        val switchUnlock = findViewById<Switch>(R.id.switchAnnounceTimeOnUnlock)
-        switchUnlock.isChecked = VidentePreferences.getAnnounceTimeOnUnlock(this)
-        switchUnlock.setOnCheckedChangeListener { _, isChecked ->
-            VidentePreferences.setAnnounceTimeOnUnlock(this, isChecked)
-        }
+        setUpBooleanRadioGroup(
+            R.id.radioGroupAnnounceTimeOnUnlock, R.id.radioAnnounceTimeOnUnlockOn, R.id.radioAnnounceTimeOnUnlockOff,
+            VidentePreferences.getAnnounceTimeOnUnlock(this)
+        ) { VidentePreferences.setAnnounceTimeOnUnlock(this, it) }
 
-        val switchBattery = findViewById<Switch>(R.id.switchAnnounceLowBattery)
-        switchBattery.isChecked = VidentePreferences.getAnnounceLowBattery(this)
-        switchBattery.setOnCheckedChangeListener { _, isChecked ->
-            VidentePreferences.setAnnounceLowBattery(this, isChecked)
-        }
+        setUpBooleanRadioGroup(
+            R.id.radioGroupAnnounceLowBattery, R.id.radioAnnounceLowBatteryOn, R.id.radioAnnounceLowBatteryOff,
+            VidentePreferences.getAnnounceLowBattery(this)
+        ) { VidentePreferences.setAnnounceLowBattery(this, it) }
 
-        val switchNotifications = findViewById<Switch>(R.id.switchAnnounceNotifications)
-        switchNotifications.isChecked = VidentePreferences.getAnnounceNotifications(this)
-        switchNotifications.setOnCheckedChangeListener { _, isChecked ->
-            VidentePreferences.setAnnounceNotifications(this, isChecked)
-        }
+        setUpBooleanRadioGroup(
+            R.id.radioGroupAnnounceNotifications, R.id.radioAnnounceNotificationsOn, R.id.radioAnnounceNotificationsOff,
+            VidentePreferences.getAnnounceNotifications(this)
+        ) { VidentePreferences.setAnnounceNotifications(this, it) }
+    }
+
+    /**
+     * Helper para cualquier opción sí/no de Ajustes: un RadioGroup con
+     * "Activado"/"Desactivado" en vez de un interruptor (regla del proyecto:
+     * ya no se usa Switch en ningún lado).
+     */
+    private fun setUpBooleanRadioGroup(
+        groupId: Int,
+        onId: Int,
+        offId: Int,
+        currentValue: Boolean,
+        onChange: (Boolean) -> Unit
+    ) {
+        val group = findViewById<RadioGroup>(groupId)
+        group.check(if (currentValue) onId else offId)
+        group.setOnCheckedChangeListener { _, checkedId -> onChange(checkedId == onId) }
     }
 
     // ---- Escritura y teclado ----
@@ -491,14 +504,18 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     }
 
     private fun setUpCursorAnnounceSpinner() {
-        switchCursorAnnounce = findViewById(R.id.switchCursorAnnounce)
-        val switch = switchCursorAnnounce ?: return
-        switch.isChecked = VidentePreferences.getCursorAnnounce(this) == VidentePreferences.CURSOR_ANNOUNCE_ON
-        switch.setOnCheckedChangeListener { _, isChecked ->
-            VidentePreferences.setCursorAnnounce(
-                this@SettingsSectionActivity,
-                if (isChecked) VidentePreferences.CURSOR_ANNOUNCE_ON else VidentePreferences.CURSOR_ANNOUNCE_OFF
-            )
+        radioGroupCursorAnnounce = findViewById(R.id.radioGroupCursorAnnounce)
+        val group = radioGroupCursorAnnounce ?: return
+        val idsByValue = mapOf(
+            VidentePreferences.CURSOR_ANNOUNCE_ON to R.id.radioCursorAnnounceOn,
+            VidentePreferences.CURSOR_ANNOUNCE_OFF to R.id.radioCursorAnnounceOff
+        )
+        val valuesById = idsByValue.entries.associate { (value, id) -> id to value }
+        group.check(idsByValue[VidentePreferences.getCursorAnnounce(this)] ?: R.id.radioCursorAnnounceOn)
+        group.setOnCheckedChangeListener { _, checkedId ->
+            valuesById[checkedId]?.let {
+                VidentePreferences.setCursorAnnounce(this@SettingsSectionActivity, it)
+            }
         }
     }
 

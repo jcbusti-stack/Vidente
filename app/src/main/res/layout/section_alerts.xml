@@ -11,28 +11,85 @@
         android:text="@string/settings_alerts_intro"
         android:textSize="14sp" />
 
-    <Switch
-        android:id="@+id/switchAnnounceTimeOnUnlock"
-        android:layout_width="match_parent"
+    <TextView
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp"
+        android:layout_marginBottom="8dp"
         android:text="@string/settings_announce_time_on_unlock_label"
         android:textSize="16sp" />
 
-    <Switch
-        android:id="@+id/switchAnnounceLowBattery"
+    <RadioGroup
+        android:id="@+id/radioGroupAnnounceTimeOnUnlock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="24dp"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioAnnounceTimeOnUnlockOn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_option_on" />
+
+        <RadioButton
+            android:id="@+id/radioAnnounceTimeOnUnlockOff"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_option_off" />
+    </RadioGroup>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
         android:text="@string/settings_announce_low_battery_label"
         android:textSize="16sp" />
 
-    <Switch
-        android:id="@+id/switchAnnounceNotifications"
+    <RadioGroup
+        android:id="@+id/radioGroupAnnounceLowBattery"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="24dp"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioAnnounceLowBatteryOn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_option_on" />
+
+        <RadioButton
+            android:id="@+id/radioAnnounceLowBatteryOff"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_option_off" />
+    </RadioGroup>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
         android:text="@string/settings_announce_notifications_label"
         android:textSize="16sp" />
+
+    <RadioGroup
+        android:id="@+id/radioGroupAnnounceNotifications"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioAnnounceNotificationsOn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_option_on" />
+
+        <RadioButton
+            android:id="@+id/radioAnnounceNotificationsOff"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_option_off" />
+    </RadioGroup>
 
 </LinearLayout>

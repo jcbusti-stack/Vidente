@@ -168,6 +168,9 @@
     <string name="settings_cursor_announce_label">Anuncio de posición del cursor</string>
     <string name="settings_cursor_announce_on">Activado</string>
     <string name="settings_cursor_announce_off">Desactivado</string>
+    <!-- Genéricas para cualquier opción sí/no en Ajustes, como RadioGroup en vez de interruptor. -->
+    <string name="settings_option_on">Activado</string>
+    <string name="settings_option_off">Desactivado</string>
 
     <string name="settings_backend_url_label">Dirección del servidor de Vidente (para el modo conversacional)</string>
     <string name="settings_backend_url_hint">Ej: https://mi-vidente.onrender.com</string>

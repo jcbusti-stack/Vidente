@@ -163,6 +163,9 @@
     <string name="settings_cursor_announce_label">Cursor position announcement</string>
     <string name="settings_cursor_announce_on">On</string>
     <string name="settings_cursor_announce_off">Off</string>
+    <!-- Generic for any yes/no option in Settings, as a RadioGroup instead of a switch. -->
+    <string name="settings_option_on">On</string>
+    <string name="settings_option_off">Off</string>
 
     <string name="settings_backend_url_label">Vidente server address (for conversational mode)</string>
     <string name="settings_backend_url_hint">e.g. https://my-vidente.onrender.com</string>
