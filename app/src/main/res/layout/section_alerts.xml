@@ -27,4 +27,12 @@
         android:text="@string/settings_announce_low_battery_label"
         android:textSize="16sp" />
 
+    <Switch
+        android:id="@+id/switchAnnounceNotifications"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_notifications_label"
+        android:textSize="16sp" />
+
 </LinearLayout>

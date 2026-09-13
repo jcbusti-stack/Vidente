@@ -443,6 +443,12 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         switchBattery.setOnCheckedChangeListener { _, isChecked ->
             VidentePreferences.setAnnounceLowBattery(this, isChecked)
         }
+
+        val switchNotifications = findViewById<Switch>(R.id.switchAnnounceNotifications)
+        switchNotifications.isChecked = VidentePreferences.getAnnounceNotifications(this)
+        switchNotifications.setOnCheckedChangeListener { _, isChecked ->
+            VidentePreferences.setAnnounceNotifications(this, isChecked)
+        }
     }
 
     // ---- Escritura y teclado ----
@@ -569,6 +575,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         VidentePreferences.setSecondaryVoiceName(this, null)
         VidentePreferences.setAnnounceTimeOnUnlock(this, VidentePreferences.DEFAULT_ANNOUNCE_TIME_ON_UNLOCK)
         VidentePreferences.setAnnounceLowBattery(this, VidentePreferences.DEFAULT_ANNOUNCE_LOW_BATTERY)
+        VidentePreferences.setAnnounceNotifications(this, VidentePreferences.DEFAULT_ANNOUNCE_NOTIFICATIONS)
         VidentePreferences.setAudioOutput(this, VidentePreferences.DEFAULT_AUDIO_OUTPUT)
         VidentePreferences.setScrollFeedback(this, VidentePreferences.DEFAULT_SCROLL_FEEDBACK)
         VidentePreferences.setTypingEcho(this, VidentePreferences.DEFAULT_TYPING_ECHO)

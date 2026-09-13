@@ -26,6 +26,8 @@ object VidentePreferences {
     const val DEFAULT_ANNOUNCE_TIME_ON_UNLOCK = true
     const val KEY_ANNOUNCE_LOW_BATTERY = "announce_low_battery"
     const val DEFAULT_ANNOUNCE_LOW_BATTERY = true
+    const val KEY_ANNOUNCE_NOTIFICATIONS = "announce_notifications"
+    const val DEFAULT_ANNOUNCE_NOTIFICATIONS = true
     const val KEY_AUDIO_OUTPUT = "audio_output"
 
     // Ruta de audio del TTS. "media" usa USAGE_MEDIA, que sigue la salida
@@ -165,6 +167,13 @@ object VidentePreferences {
 
     fun setAnnounceLowBattery(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_ANNOUNCE_LOW_BATTERY, enabled).apply()
+    }
+
+    fun getAnnounceNotifications(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_NOTIFICATIONS, DEFAULT_ANNOUNCE_NOTIFICATIONS)
+
+    fun setAnnounceNotifications(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_NOTIFICATIONS, enabled).apply()
     }
 
     fun isXiaomiAutostartConfirmed(context: Context): Boolean =

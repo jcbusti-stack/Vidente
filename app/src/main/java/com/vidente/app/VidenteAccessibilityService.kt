@@ -53,6 +53,9 @@ class VidenteAccessibilityService :
     private var ttsSecondaryReady = false
     // Momento del último ACTION_USER_PRESENT; ver el comentario en speak().
     private var lastUnlockAt = 0L
+    // Control de ruido del aviso de notificaciones; ver handleNotification().
+    private var lastNotifiedPackage: String? = null
+    private var lastNotifiedAt = 0L
     private var lastSpoken: String? = null
     private var lastSpokenAt = 0L
     private var pendingText: String? = null
@@ -385,6 +388,30 @@ class VidenteAccessibilityService :
         }
     }
 
+    /**
+     * P9 tercer aviso puntual: notificación entrante, por la voz secundaria.
+     * Solo dice qué app la mandó, nunca el contenido del mensaje (elegido a
+     * propósito: un aviso automático e inesperado no es lo mismo que leer la
+     * pantalla a propósito, y decir el contenido en voz alta podría exponer
+     * un mensaje privado si hay alguien cerca). Se ignoran las notificaciones
+     * de Vidente mismo, y no se repite el mismo aviso (misma app) si ya se
+     * dijo hace muy poco, para no saturar de avisos con apps que actualizan
+     * su notificación seguido (música, descargas, etc.).
+     */
+    private fun handleNotification(event: AccessibilityEvent) {
+        if (!VidentePreferences.getAnnounceNotifications(this)) return
+        val pkg = event.packageName?.toString() ?: return
+        if (pkg == packageName) return
+
+        val now = SystemClock.uptimeMillis()
+        if (pkg == lastNotifiedPackage && now - lastNotifiedAt < NOTIFICATION_REPEAT_GUARD_MS) return
+        lastNotifiedPackage = pkg
+        lastNotifiedAt = now
+
+        val label = appLabel(pkg) ?: pkg
+        speakSecondary(getString(R.string.spoken_notification, label))
+    }
+
     // Recursos con el idioma elegido en Ajustes; null = seguir el del sistema.
     // Sobrescribir getResources() hace que todos los getString del servicio
     // usen ese idioma sin tocarlos uno a uno.
@@ -556,6 +583,19 @@ class VidenteAccessibilityService :
                         handleTouchInteractionEnd()
                     } catch (e: Exception) {
                         Log.e(TAG, "Fallo activando por deslizar y soltar", e)
+                    }
+                }
+
+            // P9 tercer aviso puntual: notificación entrante, por la voz
+            // secundaria. Tipo de evento normal de accesibilidad (sin pedir
+            // ningún permiso aparte); en su propio try/catch por tratarse de
+            // un tipo de evento nuevo en la configuración del servicio.
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED ->
+                if (tutorialStep == TutorialStep.NONE) {
+                    try {
+                        handleNotification(event)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Fallo anunciando una notificación", e)
                     }
                 }
 
@@ -2355,6 +2395,9 @@ class VidenteAccessibilityService :
         // tiempo al aviso de hora (motor secundario) a escucharse primero.
         private const val UNLOCK_ANNOUNCE_GRACE_MS = 1000L
         private const val UNLOCK_ANNOUNCE_DELAY_MS = 600L
+        // Ver el comentario en handleNotification(): no repetir el mismo
+        // aviso (misma app) dentro de esta ventana.
+        private const val NOTIFICATION_REPEAT_GUARD_MS = 8000L
         private const val FLOATING_BUTTON_MARGIN_PX = 24
         private const val MAX_DEPTH = 12
         private const val MAX_LABEL_DEPTH = 3

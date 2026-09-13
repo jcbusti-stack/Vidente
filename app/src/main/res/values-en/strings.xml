@@ -139,6 +139,8 @@
     <string name="settings_announce_time_on_unlock_label">Announce the time on unlock</string>
     <string name="settings_announce_low_battery_label">Announce low battery</string>
     <string name="spoken_battery_low">Low battery</string>
+    <string name="settings_announce_notifications_label">Announce new notifications</string>
+    <string name="spoken_notification">Notification from %1$s</string>
     <string name="settings_reset_button">Reset to defaults</string>
     <string name="settings_reset_done">Defaults restored</string>
     <string name="settings_preview_text">This is how Vidente will sound when reading items on screen.</string>
