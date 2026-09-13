@@ -1106,7 +1106,15 @@ class VidenteAccessibilityService :
             // treeSuccessor parado exactamente en él -- padre, índice entre
             // sus hermanos, y cuál es el siguiente hermano real. Sacar esta
             // llamada y speakHoverTraversalDiagnostic() una vez cerrado el bug.
-            speakHoverTraversalDiagnostic(node)
+            // Envuelto en try/catch: handleFocusEvent corre en cada toque y no
+            // tiene su propio resguardo, así que cualquier falla acá no debe
+            // tumbar el servicio entero (esto fue justo lo que pasó en build
+            // 102, con un getChild() fuera de rango sin capturar).
+            try {
+                speakHoverTraversalDiagnostic(node)
+            } catch (e: Exception) {
+                Log.e(TAG, "speakHoverTraversalDiagnostic falló", e)
+            }
         }
 
         // Vidente gestiona el foco de accesibilidad: al leer un elemento por
@@ -2278,7 +2286,12 @@ class VidenteAccessibilityService :
             parent.recycle()
             return
         }
-        val nextChild = parent.getChild(idx + 1)
+        // getChild(index) lanza IndexOutOfBoundsException si el índice no es
+        // menor que childCount -- documentado en AccessibilityNodeInfo. El
+        // nodo tocado suele ser el ÚLTIMO hijo de su padre (ej. un botón
+        // envuelto en un contenedor de un solo hijo), así que sin este chequeo
+        // esto tumbaba el servicio en casi cualquier toque.
+        val nextChild = if (idx + 1 < parent.childCount) parent.getChild(idx + 1) else null
         val nextDesc = if (nextChild == null) {
             "ninguno"
         } else {
