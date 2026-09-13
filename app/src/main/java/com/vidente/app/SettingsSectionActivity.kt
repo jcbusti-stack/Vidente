@@ -439,6 +439,36 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         setUpBooleanCheckbox(R.id.checkboxAnnounceNotifications, VidentePreferences.getAnnounceNotifications(this)) {
             VidentePreferences.setAnnounceNotifications(this, it)
         }
+        setUpBooleanCheckbox(
+            R.id.checkboxAnnounceChargerConnected,
+            VidentePreferences.getAnnounceChargerConnected(this)
+        ) {
+            VidentePreferences.setAnnounceChargerConnected(this, it)
+        }
+        setUpBooleanCheckbox(
+            R.id.checkboxAnnounceChargerDisconnected,
+            VidentePreferences.getAnnounceChargerDisconnected(this)
+        ) {
+            VidentePreferences.setAnnounceChargerDisconnected(this, it)
+        }
+        setUpBooleanCheckbox(R.id.checkboxAnnounceFullBattery, VidentePreferences.getAnnounceFullBattery(this)) {
+            VidentePreferences.setAnnounceFullBattery(this, it)
+        }
+        setUpBooleanCheckbox(
+            R.id.checkboxAnnounceAudioDeviceConnected,
+            VidentePreferences.getAnnounceAudioDeviceConnected(this)
+        ) {
+            VidentePreferences.setAnnounceAudioDeviceConnected(this, it)
+        }
+        setUpBooleanCheckbox(
+            R.id.checkboxAnnounceAudioDeviceDisconnected,
+            VidentePreferences.getAnnounceAudioDeviceDisconnected(this)
+        ) {
+            VidentePreferences.setAnnounceAudioDeviceDisconnected(this, it)
+        }
+        setUpBooleanCheckbox(R.id.checkboxAnnounceAirplaneMode, VidentePreferences.getAnnounceAirplaneMode(this)) {
+            VidentePreferences.setAnnounceAirplaneMode(this, it)
+        }
     }
 
     /**
@@ -577,6 +607,21 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         VidentePreferences.setAnnounceTimeOnUnlock(this, VidentePreferences.DEFAULT_ANNOUNCE_TIME_ON_UNLOCK)
         VidentePreferences.setAnnounceLowBattery(this, VidentePreferences.DEFAULT_ANNOUNCE_LOW_BATTERY)
         VidentePreferences.setAnnounceNotifications(this, VidentePreferences.DEFAULT_ANNOUNCE_NOTIFICATIONS)
+        VidentePreferences.setAnnounceChargerConnected(this, VidentePreferences.DEFAULT_ANNOUNCE_CHARGER_CONNECTED)
+        VidentePreferences.setAnnounceChargerDisconnected(
+            this,
+            VidentePreferences.DEFAULT_ANNOUNCE_CHARGER_DISCONNECTED
+        )
+        VidentePreferences.setAnnounceFullBattery(this, VidentePreferences.DEFAULT_ANNOUNCE_FULL_BATTERY)
+        VidentePreferences.setAnnounceAudioDeviceConnected(
+            this,
+            VidentePreferences.DEFAULT_ANNOUNCE_AUDIO_DEVICE_CONNECTED
+        )
+        VidentePreferences.setAnnounceAudioDeviceDisconnected(
+            this,
+            VidentePreferences.DEFAULT_ANNOUNCE_AUDIO_DEVICE_DISCONNECTED
+        )
+        VidentePreferences.setAnnounceAirplaneMode(this, VidentePreferences.DEFAULT_ANNOUNCE_AIRPLANE_MODE)
         VidentePreferences.setAudioOutput(this, VidentePreferences.DEFAULT_AUDIO_OUTPUT)
         VidentePreferences.setScrollFeedback(this, VidentePreferences.DEFAULT_SCROLL_FEEDBACK)
         VidentePreferences.setTypingEcho(this, VidentePreferences.DEFAULT_TYPING_ECHO)

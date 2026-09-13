@@ -14,6 +14,9 @@
     <!-- Asistente de configuración: pedir que se ignore la optimización de
          batería, causa confirmada de fallos intermitentes en segundo plano. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Aviso puntual de audífonos/Bluetooth conectados: identificar bien el
+         tipo de dispositivo (AudioDeviceCallback) en Android 12+. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <queries>
         <intent>

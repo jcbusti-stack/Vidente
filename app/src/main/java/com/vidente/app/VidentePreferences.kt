@@ -28,6 +28,18 @@ object VidentePreferences {
     const val DEFAULT_ANNOUNCE_LOW_BATTERY = true
     const val KEY_ANNOUNCE_NOTIFICATIONS = "announce_notifications"
     const val DEFAULT_ANNOUNCE_NOTIFICATIONS = true
+    const val KEY_ANNOUNCE_CHARGER_CONNECTED = "announce_charger_connected"
+    const val DEFAULT_ANNOUNCE_CHARGER_CONNECTED = true
+    const val KEY_ANNOUNCE_CHARGER_DISCONNECTED = "announce_charger_disconnected"
+    const val DEFAULT_ANNOUNCE_CHARGER_DISCONNECTED = true
+    const val KEY_ANNOUNCE_FULL_BATTERY = "announce_full_battery"
+    const val DEFAULT_ANNOUNCE_FULL_BATTERY = true
+    const val KEY_ANNOUNCE_AUDIO_DEVICE_CONNECTED = "announce_audio_device_connected"
+    const val DEFAULT_ANNOUNCE_AUDIO_DEVICE_CONNECTED = true
+    const val KEY_ANNOUNCE_AUDIO_DEVICE_DISCONNECTED = "announce_audio_device_disconnected"
+    const val DEFAULT_ANNOUNCE_AUDIO_DEVICE_DISCONNECTED = true
+    const val KEY_ANNOUNCE_AIRPLANE_MODE = "announce_airplane_mode"
+    const val DEFAULT_ANNOUNCE_AIRPLANE_MODE = true
     const val KEY_AUDIO_OUTPUT = "audio_output"
 
     // Ruta de audio del TTS. "media" usa USAGE_MEDIA, que sigue la salida
@@ -174,6 +186,48 @@ object VidentePreferences {
 
     fun setAnnounceNotifications(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_ANNOUNCE_NOTIFICATIONS, enabled).apply()
+    }
+
+    fun getAnnounceChargerConnected(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_CHARGER_CONNECTED, DEFAULT_ANNOUNCE_CHARGER_CONNECTED)
+
+    fun setAnnounceChargerConnected(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_CHARGER_CONNECTED, enabled).apply()
+    }
+
+    fun getAnnounceChargerDisconnected(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_CHARGER_DISCONNECTED, DEFAULT_ANNOUNCE_CHARGER_DISCONNECTED)
+
+    fun setAnnounceChargerDisconnected(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_CHARGER_DISCONNECTED, enabled).apply()
+    }
+
+    fun getAnnounceFullBattery(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_FULL_BATTERY, DEFAULT_ANNOUNCE_FULL_BATTERY)
+
+    fun setAnnounceFullBattery(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_FULL_BATTERY, enabled).apply()
+    }
+
+    fun getAnnounceAudioDeviceConnected(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_AUDIO_DEVICE_CONNECTED, DEFAULT_ANNOUNCE_AUDIO_DEVICE_CONNECTED)
+
+    fun setAnnounceAudioDeviceConnected(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_AUDIO_DEVICE_CONNECTED, enabled).apply()
+    }
+
+    fun getAnnounceAudioDeviceDisconnected(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_AUDIO_DEVICE_DISCONNECTED, DEFAULT_ANNOUNCE_AUDIO_DEVICE_DISCONNECTED)
+
+    fun setAnnounceAudioDeviceDisconnected(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_AUDIO_DEVICE_DISCONNECTED, enabled).apply()
+    }
+
+    fun getAnnounceAirplaneMode(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_AIRPLANE_MODE, DEFAULT_ANNOUNCE_AIRPLANE_MODE)
+
+    fun setAnnounceAirplaneMode(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_AIRPLANE_MODE, enabled).apply()
     }
 
     fun isXiaomiAutostartConfirmed(context: Context): Boolean =

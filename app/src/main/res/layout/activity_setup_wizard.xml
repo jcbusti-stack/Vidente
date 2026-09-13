@@ -52,6 +52,22 @@
             android:textSize="13sp" />
 
         <Button
+            android:id="@+id/buttonStepBluetooth"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/textStepBluetoothHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="@string/wizard_step_bluetooth_hint"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/buttonStepAutostart"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

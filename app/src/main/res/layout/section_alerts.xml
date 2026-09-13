@@ -32,4 +32,46 @@
         android:layout_marginBottom="24dp"
         android:text="@string/settings_announce_notifications_label" />
 
+    <CheckBox
+        android:id="@+id/checkboxAnnounceChargerConnected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_charger_connected_label" />
+
+    <CheckBox
+        android:id="@+id/checkboxAnnounceChargerDisconnected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_charger_disconnected_label" />
+
+    <CheckBox
+        android:id="@+id/checkboxAnnounceFullBattery"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_full_battery_label" />
+
+    <CheckBox
+        android:id="@+id/checkboxAnnounceAudioDeviceConnected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_audio_device_connected_label" />
+
+    <CheckBox
+        android:id="@+id/checkboxAnnounceAudioDeviceDisconnected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_audio_device_disconnected_label" />
+
+    <CheckBox
+        android:id="@+id/checkboxAnnounceAirplaneMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_airplane_mode_label" />
+
 </LinearLayout>

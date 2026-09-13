@@ -13,6 +13,10 @@ import android.content.res.Resources
 import android.graphics.PixelFormat
 import android.media.AudioAttributes
 import android.media.SoundPool
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -354,6 +358,11 @@ class VidenteAccessibilityService :
         ttsSecondary?.speak(text, TextToSpeech.QUEUE_ADD, null, SECONDARY_UTTERANCE_ID)
     }
 
+    // P9 aviso de carga completa: solo la primera vez que se llega a 100%,
+    // no cada vez que llega ACTION_BATTERY_CHANGED (que es muy seguido).
+    // Se vuelve a habilitar recién cuando el nivel baja de 100% de nuevo.
+    private var batteryWasFull = false
+
     /**
      * P9 avisos puntuales, por la voz secundaria. Cada uno usa un evento
      * oficial de Android (documentación pública, no algo deducido de otra
@@ -365,6 +374,11 @@ class VidenteAccessibilityService :
      *   baja (el mismo que dispara su diálogo nativo) -- un solo aviso por
      *   cada vez que se cruza, sin que Vidente tenga que vigilar el
      *   porcentaje ni evitar avisos repetidos por su cuenta.
+     * - ACTION_POWER_CONNECTED / ACTION_POWER_DISCONNECTED: se enchufó o
+     *   desenchufó el cargador (cualquier tipo: cable, inalámbrico).
+     * - ACTION_BATTERY_CHANGED: llega seguido con el nivel actual; se usa
+     *   solo para calcular el porcentaje y avisar carga completa exacta.
+     * - ACTION_AIRPLANE_MODE_CHANGED: se activó o desactivó el modo avión.
      */
     private val systemEventReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -385,7 +399,70 @@ class VidenteAccessibilityService :
                     if (!VidentePreferences.getAnnounceLowBattery(this@VidenteAccessibilityService)) return
                     speakSecondary(getString(R.string.spoken_battery_low))
                 }
+                Intent.ACTION_POWER_CONNECTED -> {
+                    if (!VidentePreferences.getAnnounceChargerConnected(this@VidenteAccessibilityService)) return
+                    speakSecondary(getString(R.string.spoken_charger_connected))
+                }
+                Intent.ACTION_POWER_DISCONNECTED -> {
+                    if (!VidentePreferences.getAnnounceChargerDisconnected(this@VidenteAccessibilityService)) return
+                    speakSecondary(getString(R.string.spoken_charger_disconnected))
+                }
+                Intent.ACTION_BATTERY_CHANGED -> {
+                    val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                    val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                    if (level < 0 || scale <= 0) return
+                    val full = level * 100 / scale >= 100
+                    if (full && !batteryWasFull) {
+                        batteryWasFull = true
+                        if (VidentePreferences.getAnnounceFullBattery(this@VidenteAccessibilityService)) {
+                            speakSecondary(getString(R.string.spoken_battery_full))
+                        }
+                    } else if (!full) {
+                        batteryWasFull = false
+                    }
+                }
+                Intent.ACTION_AIRPLANE_MODE_CHANGED -> {
+                    if (!VidentePreferences.getAnnounceAirplaneMode(this@VidenteAccessibilityService)) return
+                    val on = intent.getBooleanExtra("state", false)
+                    speakSecondary(
+                        getString(if (on) R.string.spoken_airplane_mode_on else R.string.spoken_airplane_mode_off)
+                    )
+                }
             }
+        }
+    }
+
+    /**
+     * P9 aviso puntual: audífonos o Bluetooth conectados/desconectados. Se
+     * usa AudioDeviceCallback (la forma moderna recomendada por Android,
+     * disponible desde API 23; ACTION_HEADSET_PLUG quedó obsoleto e
+     * inconsistente) en vez de escuchar Bluetooth directamente: reporta por
+     * igual auriculares por cable y por Bluetooth, sin depender de una app o
+     * librería de terceros.
+     */
+    private fun isHeadphoneType(type: Int): Boolean {
+        if (type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+            type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+            type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+            type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+        ) {
+            return true
+        }
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            (type == AudioDeviceInfo.TYPE_BLE_HEADSET || type == AudioDeviceInfo.TYPE_BLE_SPEAKER)
+    }
+
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<AudioDeviceInfo>) {
+            if (addedDevices.none { isHeadphoneType(it.type) }) return
+            if (!VidentePreferences.getAnnounceAudioDeviceConnected(this@VidenteAccessibilityService)) return
+            speakSecondary(getString(R.string.spoken_audio_device_connected))
+        }
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<AudioDeviceInfo>) {
+            if (removedDevices.none { isHeadphoneType(it.type) }) return
+            if (!VidentePreferences.getAnnounceAudioDeviceDisconnected(this@VidenteAccessibilityService)) return
+            speakSecondary(getString(R.string.spoken_audio_device_disconnected))
         }
     }
 
@@ -492,8 +569,26 @@ class VidenteAccessibilityService :
             IntentFilter().apply {
                 addAction(Intent.ACTION_USER_PRESENT)
                 addAction(Intent.ACTION_BATTERY_LOW)
+                addAction(Intent.ACTION_POWER_CONNECTED)
+                addAction(Intent.ACTION_POWER_DISCONNECTED)
+                addAction(Intent.ACTION_BATTERY_CHANGED)
+                addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
             }
         )
+
+        // Mismo motivo que el receiver de arriba: puede reconectar el
+        // servicio, así que se desregistra primero por si ya estaba.
+        try {
+            val audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager
+            try {
+                audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback)
+            } catch (e: Exception) {
+                // No estaba registrado todavía: es lo esperado la primera vez.
+            }
+            audioManager?.registerAudioDeviceCallback(audioDeviceCallback, null)
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo registrar AudioDeviceCallback", e)
+        }
 
         // Tutorial de bienvenida la primera vez que se activa el servicio.
         // Se marca como visto al arrancarlo para no repetirlo en cada
@@ -2401,6 +2496,11 @@ class VidenteAccessibilityService :
             unregisterReceiver(systemEventReceiver)
         } catch (e: Exception) {
             Log.w(TAG, "systemEventReceiver ya no estaba registrado", e)
+        }
+        try {
+            (getSystemService(AUDIO_SERVICE) as? AudioManager)?.unregisterAudioDeviceCallback(audioDeviceCallback)
+        } catch (e: Exception) {
+            Log.w(TAG, "audioDeviceCallback ya no estaba registrado", e)
         }
         VidentePreferences.prefs(this).unregisterOnSharedPreferenceChangeListener(this)
         mainHandler.removeCallbacksAndMessages(null)

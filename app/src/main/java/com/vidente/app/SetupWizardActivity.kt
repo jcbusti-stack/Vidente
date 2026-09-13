@@ -62,6 +62,22 @@ class SetupWizardActivity : AppCompatActivity() {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MIC)
         }
 
+        // El permiso de Bluetooth "dispositivos cercanos" solo existe como
+        // permiso en tiempo de ejecución desde Android 12 (API 31); en
+        // versiones anteriores el aviso de audífonos/Bluetooth funciona sin
+        // pedir nada.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            findViewById<Button>(R.id.buttonStepBluetooth).visibility = View.VISIBLE
+            findViewById<TextView>(R.id.textStepBluetoothHint).visibility = View.VISIBLE
+            findViewById<Button>(R.id.buttonStepBluetooth).setOnClickListener {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
+                    REQUEST_BLUETOOTH
+                )
+            }
+        }
+
         if (isXiaomi) {
             findViewById<Button>(R.id.buttonStepAutostart).visibility = View.VISIBLE
             findViewById<TextView>(R.id.textStepAutostartHint).visibility = View.VISIBLE
@@ -104,6 +120,10 @@ class SetupWizardActivity : AppCompatActivity() {
             getString(R.string.wizard_step_battery, statusText(isIgnoringBatteryOptimizations()))
         findViewById<Button>(R.id.buttonStepMic).text =
             getString(R.string.wizard_step_mic, statusText(hasMicPermission()))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            findViewById<Button>(R.id.buttonStepBluetooth).text =
+                getString(R.string.wizard_step_bluetooth, statusText(hasBluetoothPermission()))
+        }
         if (isXiaomi) {
             // Xiaomi no expone forma de consultar este ajuste por código: el
             // estado viene de la casilla que el propio usuario marca a mano.
@@ -129,6 +149,10 @@ class SetupWizardActivity : AppCompatActivity() {
 
     private fun hasMicPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun hasBluetoothPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
             PackageManager.PERMISSION_GRANTED
 
     private fun isAccessibilityServiceEnabled(): Boolean {
@@ -172,5 +196,6 @@ class SetupWizardActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_MIC = 1
+        private const val REQUEST_BLUETOOTH = 2
     }
 }
