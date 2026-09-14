@@ -1,0 +1,19 @@
+<resources>
+    <!--
+        Paleta oscura fija de Vidente: pensada para alguien con baja visión
+        que sí ve la pantalla pero le molesta el brillo (Ajustes → revisión
+        de diseño visual). Antes la app no definía ningún color propio y
+        heredaba la paleta por defecto de Material Components, de ahí los
+        botones morado/lavanda brillantes que desentonaban con el resto,
+        oscuro. Fondo negro y texto blanco, siempre, sin depender de si el
+        teléfono está en modo claro u oscuro.
+    -->
+    <color name="vidente_background">#000000</color>
+    <color name="vidente_text">#FFFFFF</color>
+    <color name="vidente_text_secondary">#C4C4C4</color>
+    <!-- Gris neutro oscuro para botones y controles: suficiente contraste
+         contra el negro para distinguirse como control, sin ser un color
+         brillante que "salte" en la pantalla. -->
+    <color name="vidente_control">#2A2A2A</color>
+    <color name="vidente_control_pressed">#404040</color>
+</resources>

@@ -1649,7 +1649,15 @@ class VidenteAccessibilityService :
             )
         }
 
-        if (node.isSelected) states.add(getString(R.string.spoken_state_selected))
+        // "isSelected" NO se anuncia a propósito (a diferencia de isChecked):
+        // Android lo marca solo, sin que Vidente ni la app lo pidan, en la
+        // fila resaltada de una lista de una sola elección (ListView en modo
+        // CHOICE_MODE_SINGLE) -- exactamente lo que arma por dentro el
+        // desplegable abierto de un Spinner. El resultado era "seleccionado"
+        // en TODAS las opciones al abrir un desplegable (Idioma, Voz), justo
+        // el ruido genérico que el ajuste de build 111 quería sacar y que
+        // esta otra fuente -- distinta de la de RadioButton/CheckBox de
+        // arriba -- se había quedado afuera.
         if (!node.isEnabled) states.add(getString(R.string.spoken_state_disabled))
 
         return states
@@ -2033,17 +2041,18 @@ class VidenteAccessibilityService :
         if (nodes.isEmpty()) return
 
         // Mismo criterio que el resto de la navegación (ver
-        // currentNavigationAnchor): si el foco del sistema no está puesto
+        // navigationAnchorCandidates): si el foco del sistema no está puesto
         // -- lo típico justo después de un toque directo --, se arranca
         // desde el elemento que el usuario acaba de escuchar, no desde el
-        // principio de la pantalla.
+        // principio de la pantalla. Se prueban los dos candidatos, no uno
+        // solo: cualquiera de las dos fuentes puede fallar por separado.
         var focusedIdx = nodes.indexOfFirst { it.isAccessibilityFocused }
         if (focusedIdx < 0) {
-            val fallback = currentNavigationAnchor()
-            if (fallback != null) {
-                focusedIdx = nodes.indexOfFirst { it == fallback }
-                fallback.recycle()
+            val candidates = navigationAnchorCandidates()
+            for (c in candidates) {
+                if (focusedIdx < 0) focusedIdx = nodes.indexOfFirst { it == c }
             }
+            candidates.forEach { it.recycle() }
         }
         val start = if (focusedIdx >= 0) focusedIdx else 0
         continuousLines = nodes.drop(start).mapNotNull { describeForSpeech(it) }
@@ -2469,14 +2478,15 @@ class VidenteAccessibilityService :
         // de un toque directo todavía no es de fiar: en ese caso se ubica al
         // elemento que el usuario acaba de escuchar, para no empezar a buscar
         // desde el principio de la pantalla (mismo criterio que el resto de
-        // los modos de navegación, ver currentNavigationAnchor).
+        // los modos de navegación, ver navigationAnchorCandidates). Se
+        // prueban los dos candidatos, no uno solo.
         var anchor = all.indexOfFirst { it.isAccessibilityFocused }
         if (anchor < 0) {
-            val fallback = currentNavigationAnchor()
-            if (fallback != null) {
-                anchor = all.indexOfFirst { it == fallback }
-                fallback.recycle()
+            val candidates = navigationAnchorCandidates()
+            for (c in candidates) {
+                if (anchor < 0) anchor = all.indexOfFirst { it == c }
             }
+            candidates.forEach { it.recycle() }
         }
         val n = all.size
         var found = -1
@@ -2572,17 +2582,6 @@ class VidenteAccessibilityService :
         return out
     }
 
-    /**
-     * Mueve el foco de accesibilidad al siguiente o anterior elemento
-     * navegable. Recorre el árbol de verdad desde el elemento actual (el que
-     * tiene el foco de accesibilidad, o el último que leyó Vidente), sin lista
-     * plana ni comparación de índices: primer navegable dentro del actual, si
-     * no el siguiente hermano navegable, si no se sube al ancestro y se prueba
-     * su siguiente hermano, y así. Al agotar el árbol se envuelve al extremo y
-     * se deja pendiente el aviso de borde. Este recorrido estructural funciona
-     * también en apps (React Native: Claude, Grok) donde comparar nodos por
-     * identidad falla.
-     */
     /** Copia utilizable del último elemento que Vidente leyó, o null si ya no vale. */
     @Suppress("DEPRECATION")
     private fun anchorFromLastFocusedNode(): AccessibilityNodeInfo? {
@@ -2593,49 +2592,89 @@ class VidenteAccessibilityService :
     }
 
     /**
-     * "Desde dónde" arranca cualquier gesto de navegación. Lo usan todos los
-     * modos (elemento, granularidad de texto, saltar por tipo y cursor a los
-     * bordes) para no volver a tener el mismo fallo en unos y no en otros.
+     * Hasta dos candidatos para "desde dónde" arranca un gesto de
+     * navegación, en el orden con más chances de acertar primero: el
+     * elemento que el usuario acaba de escuchar (si el gesto viene de un
+     * toque reciente) o el foco real del sistema, y el otro como respaldo.
      *
-     * Si el gesto viene justo después de un toque directo, manda el elemento
-     * que el usuario acaba de escuchar: el foco del sistema todavía no es de
-     * fiar en ese instante. Si no, se busca el foco real en todas las
-     * ventanas (no solo en la activa), y como último recurso se usa igual el
-     * último elemento leído.
+     * Se prueban los DOS, no uno solo: cualquiera de las dos fuentes puede
+     * fallar por separado (justo después de un toque el foco del sistema
+     * puede no estar puesto todavía; el último elemento leído puede quedar
+     * desactualizado si la referencia guardada ya no calza con el árbol
+     * actual). Antes se usaba nada más el primero que hubiera, y quedarse
+     * sin ninguno reaparecía como el bug de "el primer deslizamiento tras un
+     * toque se va al principio/fin de la pantalla" en pantallas donde esa
+     * única fuente fallaba (ver moveAccessibilityFocus/moveToType). El
+     * llamador recicla cada uno que use.
      */
-    private fun currentNavigationAnchor(): AccessibilityNodeInfo? {
-        if (gestureFollowsRecentHover) anchorFromLastFocusedNode()?.let { return it }
-        findAccessibilityFocusedNodeAcrossWindows()?.let { return it }
-        return anchorFromLastFocusedNode()
+    private fun navigationAnchorCandidates(): List<AccessibilityNodeInfo> {
+        val result = mutableListOf<AccessibilityNodeInfo>()
+        val preferred = if (gestureFollowsRecentHover) {
+            anchorFromLastFocusedNode()
+        } else {
+            findAccessibilityFocusedNodeAcrossWindows()
+        }
+        preferred?.let { result.add(it) }
+        val fallback = if (gestureFollowsRecentHover) {
+            findAccessibilityFocusedNodeAcrossWindows()
+        } else {
+            anchorFromLastFocusedNode()
+        }
+        fallback?.let { result.add(it) }
+        return result
     }
 
+    /**
+     * Un solo candidato (el preferido de navigationAnchorCandidates), para
+     * los modos que solo necesitan "el elemento actual" y no hacen su propia
+     * búsqueda de sucesor (granularidad de texto, cursor a los bordes).
+     */
+    @Suppress("DEPRECATION")
+    private fun currentNavigationAnchor(): AccessibilityNodeInfo? {
+        val candidates = navigationAnchorCandidates()
+        val first = candidates.firstOrNull()
+        candidates.drop(1).forEach { it.recycle() }
+        return first
+    }
+
+    /**
+     * Mueve el foco de accesibilidad al siguiente o anterior elemento
+     * navegable. Recorre el árbol de verdad desde el elemento actual (el que
+     * tiene el foco de accesibilidad, o el último que leyó Vidente), sin lista
+     * plana ni comparación de índices: primer navegable dentro del actual, si
+     * no el siguiente hermano navegable, si no se sube al ancestro y se prueba
+     * su siguiente hermano, y así. Al agotar el árbol se envuelve al extremo y
+     * se deja pendiente el aviso de borde. Este recorrido estructural funciona
+     * también en apps (React Native: Claude, Grok) donde comparar nodos por
+     * identidad falla.
+     *
+     * Prueba los dos candidatos de navigationAnchorCandidates antes de darse
+     * por vencido: si el primero no tiene sucesor (por ej. una referencia
+     * desactualizada), se intenta con el segundo antes de asumir que se
+     * llegó al final de la pantalla.
+     */
     @Suppress("DEPRECATION")
     private fun moveAccessibilityFocus(forward: Boolean): Boolean {
         val root = rootInActiveWindow ?: return false
 
-        // Si el usuario acaba de tocar la pantalla, el elemento que escuchó
-        // manda sobre el foco del sistema: justo después de un toque ese foco
-        // todavía no es de fiar, y quedarse sin ancla hacía que el recorrido
-        // se fuera al principio (o al final) de la pantalla en vez de al
-        // elemento contiguo. Es el mismo criterio que ya usaba
-        // activateFocusedElement para el doble toque; este camino se había
-        // quedado sin él.
-        val anchor: AccessibilityNodeInfo? = currentNavigationAnchor()
+        val candidates = navigationAnchorCandidates()
 
-        treeWalkBudget = TREE_WALK_BUDGET
         var wrapped = false
         var target: AccessibilityNodeInfo? = null
         try {
-            val a = anchor
-            if (a != null) target = treeSuccessor(a, forward)
+            for (anchor in candidates) {
+                if (target != null) continue
+                treeWalkBudget = TREE_WALK_BUDGET
+                target = treeSuccessor(anchor, forward)
+            }
             if (target == null) {
                 target = firstNavigableInSubtree(root, includeSelf = false, forward = forward)
-                wrapped = a != null
+                wrapped = candidates.isNotEmpty()
             }
         } catch (e: Exception) {
             Log.w(TAG, "moveAccessibilityFocus: fallo recorriendo el árbol", e)
         }
-        anchor?.recycle()
+        candidates.forEach { it.recycle() }
         root.recycle()
 
         val t = target ?: return false

@@ -1,3 +1,26 @@
 <resources>
-    <style name="Theme.Vidente" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+    <!--
+        Theme.MaterialComponents (sin ".DayNight") es la variante oscura fija
+        de Material Components: a diferencia de la que había antes
+        (".DayNight.NoActionBar"), no cambia según el modo claro/oscuro del
+        teléfono, queda siempre oscura, que es lo que se pidió ("fondo
+        negro... de forma consistente", sin depender del ajuste del sistema).
+    -->
+    <style name="Theme.Vidente" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="android:windowBackground">@color/vidente_background</item>
+        <item name="android:colorBackground">@color/vidente_background</item>
+        <item name="android:textColorPrimary">@color/vidente_text</item>
+        <item name="android:textColorSecondary">@color/vidente_text_secondary</item>
+        <item name="android:textColorHint">@color/vidente_text_secondary</item>
+        <!-- Los <Button> comunes se infan como MaterialButton bajo un tema
+             de Material Components, y ese estilo usa colorPrimary de fondo:
+             acá vivía el morado/lavanda brillante que desentonaba. -->
+        <item name="colorPrimary">@color/vidente_control</item>
+        <item name="colorPrimaryDark">@color/vidente_background</item>
+        <item name="colorAccent">@color/vidente_control</item>
+        <item name="colorControlNormal">@color/vidente_text</item>
+        <item name="colorControlActivated">@color/vidente_text</item>
+        <item name="colorButtonNormal">@color/vidente_control</item>
+        <item name="android:colorControlHighlight">@color/vidente_control_pressed</item>
+    </style>
 </resources>

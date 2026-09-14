@@ -82,7 +82,6 @@
     <string name="spoken_state_off">off</string>
     <string name="spoken_state_checked">checked</string>
     <string name="spoken_state_unchecked">not checked</string>
-    <string name="spoken_state_selected">selected</string>
     <string name="spoken_state_disabled">not available</string>
 
     <string name="spoken_screen_start">Start of screen</string>
@@ -189,6 +188,7 @@
     <string name="settings_reset_button">Reset to defaults</string>
     <string name="settings_reset_done">Defaults restored</string>
     <string name="settings_preview_text">This is how Vidente will sound when reading items on screen.</string>
+    <string name="settings_preview_text_secondary">This is how Vidente will sound for punctual announcements, like the time when you unlock or a low battery warning.</string>
     <string name="settings_replay_tutorial">Repeat tutorial</string>
     <string name="settings_replay_tutorial_started">The tutorial is about to start. Listen to Vidente\'s instructions.</string>
     <string name="settings_audio_output_label">Voice output</string>

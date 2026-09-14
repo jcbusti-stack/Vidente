@@ -333,7 +333,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     private fun setUpVoiceSpinner() {
         val spinner = spinnerVoice ?: return
         val labels = mutableListOf(getString(R.string.settings_voice_auto))
-        labels += availableVoices.map { VoiceUtils.displayName(it) }
+        labels += VoiceUtils.displayNames(availableVoices)
 
         spinner.adapter = plainSpinnerAdapter(labels)
 
@@ -420,7 +420,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     private fun setUpVoiceSecondarySpinner() {
         val spinner = spinnerVoiceSecondary ?: return
         val labels = mutableListOf(getString(R.string.settings_voice_auto))
-        labels += secondaryAvailableVoices.map { VoiceUtils.displayName(it) }
+        labels += VoiceUtils.displayNames(secondaryAvailableVoices)
         spinner.adapter = plainSpinnerAdapter(labels)
 
         val savedVoiceName = VidentePreferences.getSecondaryVoiceName(this)
@@ -445,7 +445,12 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         if (!ttsSecondaryReady) return
         engine.setSpeechRate(currentRate)
         engine.setPitch(currentPitch)
-        engine.speak(getString(R.string.settings_preview_text), TextToSpeech.QUEUE_FLUSH, null, PREVIEW_SECONDARY_UTTERANCE_ID)
+        engine.speak(
+            getString(R.string.settings_preview_text_secondary),
+            TextToSpeech.QUEUE_FLUSH,
+            null,
+            PREVIEW_SECONDARY_UTTERANCE_ID
+        )
     }
 
     // ---- Avisos puntuales ----
