@@ -84,4 +84,18 @@
         android:layout_marginBottom="24dp"
         android:text="@string/settings_announce_uppercase_label" />
 
+    <CheckBox
+        android:id="@+id/checkboxAnnounceSpellingExample"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_spelling_example_label" />
+
+    <CheckBox
+        android:id="@+id/checkboxAnnounceKeyboardExploration"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_keyboard_exploration_label" />
+
 </LinearLayout>

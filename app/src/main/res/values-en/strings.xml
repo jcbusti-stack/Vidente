@@ -64,6 +64,7 @@
     <string name="gesture_action_go_recents">Open recent apps</string>
     <string name="gesture_action_cursor_to_field_start">Cursor to the start of the field</string>
     <string name="gesture_action_cursor_to_field_end">Cursor to the end of the field</string>
+    <string name="gesture_action_cycle_tts_engine">Switch voice engine</string>
     <string name="settings_language_label">Language</string>
     <string name="settings_language_system">Follow the phone\'s language</string>
 
@@ -204,6 +205,10 @@
     <string name="settings_keyboard_write_mode_label">Keyboard writing mode</string>
     <string name="settings_keyboard_write_mode_double_tap">Double tap</string>
     <string name="settings_announce_uppercase_label">Announce uppercase when spelling out</string>
+    <string name="settings_announce_spelling_example_label">Announce example word when spelling out</string>
+    <string name="spoken_spelling_example">%1$s, as in %2$s</string>
+    <string name="settings_announce_keyboard_exploration_label">Announce each key while exploring the keyboard</string>
+    <string name="spoken_tts_engine_changed">Voice engine: %1$s</string>
     <string name="spoken_uppercase_letter">Uppercase %1$s</string>
     <string name="settings_keyboard_write_mode_slide_release">Slide and release</string>
     <string name="settings_cursor_announce_label">Cursor position announcement</string>

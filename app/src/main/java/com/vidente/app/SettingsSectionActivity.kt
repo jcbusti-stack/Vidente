@@ -527,6 +527,18 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         setUpBooleanCheckbox(R.id.checkboxAnnounceUppercase, VidentePreferences.getAnnounceUppercase(this)) {
             VidentePreferences.setAnnounceUppercase(this, it)
         }
+        setUpBooleanCheckbox(
+            R.id.checkboxAnnounceSpellingExample,
+            VidentePreferences.getAnnounceSpellingExample(this)
+        ) {
+            VidentePreferences.setAnnounceSpellingExample(this, it)
+        }
+        setUpBooleanCheckbox(
+            R.id.checkboxAnnounceKeyboardExploration,
+            VidentePreferences.getAnnounceKeyboardExploration(this)
+        ) {
+            VidentePreferences.setAnnounceKeyboardExploration(this, it)
+        }
     }
 
     private fun setUpKeyboardWriteModeSpinner() {
@@ -761,6 +773,11 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         VidentePreferences.setKeyboardWriteMode(this, VidentePreferences.DEFAULT_KEYBOARD_WRITE_MODE)
         VidentePreferences.setCursorAnnounce(this, VidentePreferences.DEFAULT_CURSOR_ANNOUNCE)
         VidentePreferences.setAnnounceUppercase(this, VidentePreferences.DEFAULT_ANNOUNCE_UPPERCASE)
+        VidentePreferences.setAnnounceSpellingExample(this, VidentePreferences.DEFAULT_ANNOUNCE_SPELLING_EXAMPLE)
+        VidentePreferences.setAnnounceKeyboardExploration(
+            this,
+            VidentePreferences.DEFAULT_ANNOUNCE_KEYBOARD_EXPLORATION
+        )
         VidentePreferences.setGestureActionMap(this, GestureConfig.DEFAULT_MAP)
         Toast.makeText(this, R.string.settings_reset_done, Toast.LENGTH_SHORT).show()
     }

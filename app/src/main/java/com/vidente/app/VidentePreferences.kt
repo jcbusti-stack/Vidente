@@ -97,6 +97,20 @@ object VidentePreferences {
     const val KEY_ANNOUNCE_UPPERCASE = "announce_uppercase"
     const val DEFAULT_ANNOUNCE_UPPERCASE = true
 
+    // Palabra de ejemplo al deletrear ("A, de Antonio"), al teclear un
+    // carácter suelto o al explorar carácter por carácter (P7); no al mover
+    // el cursor con flechas, ahí sería demasiado seguido. Desactivado por
+    // defecto: no hay un lector de pantalla de referencia que lo traiga de
+    // fábrica, y no queremos sumar verbosidad sin que el usuario la pida.
+    const val KEY_ANNOUNCE_SPELLING_EXAMPLE = "announce_spelling_example"
+    const val DEFAULT_ANNOUNCE_SPELLING_EXAMPLE = false
+
+    // Anuncio de cada tecla al explorar el teclado en pantalla con el dedo
+    // (antes de tocarla para escribir). Activado por defecto: es el
+    // comportamiento de siempre.
+    const val KEY_ANNOUNCE_KEYBOARD_EXPLORATION = "announce_keyboard_exploration"
+    const val DEFAULT_ANNOUNCE_KEYBOARD_EXPLORATION = true
+
     // Configuración de gestos (paso 2 de "gestos personalizables"): qué
     // acción dispara cada gesto. Se guarda como texto (JSON de
     // gesto -> nombre de la acción) porque SharedPreferences no admite
@@ -311,6 +325,20 @@ object VidentePreferences {
 
     fun setAnnounceUppercase(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_ANNOUNCE_UPPERCASE, enabled).apply()
+    }
+
+    fun getAnnounceSpellingExample(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_SPELLING_EXAMPLE, DEFAULT_ANNOUNCE_SPELLING_EXAMPLE)
+
+    fun setAnnounceSpellingExample(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_SPELLING_EXAMPLE, enabled).apply()
+    }
+
+    fun getAnnounceKeyboardExploration(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ANNOUNCE_KEYBOARD_EXPLORATION, DEFAULT_ANNOUNCE_KEYBOARD_EXPLORATION)
+
+    fun setAnnounceKeyboardExploration(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ANNOUNCE_KEYBOARD_EXPLORATION, enabled).apply()
     }
 
     /**

@@ -64,6 +64,7 @@
     <string name="gesture_action_go_recents">Abrir las aplicaciones recientes</string>
     <string name="gesture_action_cursor_to_field_start">Cursor al inicio del campo</string>
     <string name="gesture_action_cursor_to_field_end">Cursor al final del campo</string>
+    <string name="gesture_action_cycle_tts_engine">Cambiar de motor de voz</string>
     <string name="settings_language_label">Idioma</string>
     <string name="settings_language_system">Seguir el idioma del teléfono</string>
     <string name="language_name_es">Español</string>
@@ -209,6 +210,10 @@
     <string name="settings_keyboard_write_mode_label">Modo de escritura en teclado</string>
     <string name="settings_keyboard_write_mode_double_tap">Doble toque</string>
     <string name="settings_announce_uppercase_label">Anunciar mayúsculas al deletrear</string>
+    <string name="settings_announce_spelling_example_label">Anunciar palabra de ejemplo al deletrear</string>
+    <string name="spoken_spelling_example">%1$s, de %2$s</string>
+    <string name="settings_announce_keyboard_exploration_label">Anunciar cada tecla al explorar el teclado</string>
+    <string name="spoken_tts_engine_changed">Motor de voz: %1$s</string>
     <string name="spoken_uppercase_letter">Mayúscula %1$s</string>
     <string name="settings_keyboard_write_mode_slide_release">Deslizar y soltar</string>
     <string name="settings_cursor_announce_label">Anuncio de posición del cursor</string>

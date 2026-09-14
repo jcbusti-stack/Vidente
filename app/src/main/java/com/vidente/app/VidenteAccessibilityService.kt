@@ -167,7 +167,8 @@ class VidenteAccessibilityService :
         GO_BACK,
         GO_RECENTS,
         CURSOR_TO_FIELD_START,
-        CURSOR_TO_FIELD_END
+        CURSOR_TO_FIELD_END,
+        CYCLE_TTS_ENGINE
     }
 
     // Los valores por defecto viven en GestureConfig, compartidos con la
@@ -302,6 +303,8 @@ class VidenteAccessibilityService :
     // por defecto activado.
     private var cursorAnnounceEnabled = true
     private var announceUppercase = true
+    private var announceSpellingExample = false
+    private var announceKeyboardExploration = true
     private var lastCursorIndex = -1
     // Identifica el campo al que corresponde lastCursorIndex (id de vista, o
     // el propio texto leído si no tiene id), para no reiniciar la referencia
@@ -1154,6 +1157,8 @@ class VidenteAccessibilityService :
         cursorAnnounceEnabled =
             VidentePreferences.getCursorAnnounce(this) == VidentePreferences.CURSOR_ANNOUNCE_ON
         announceUppercase = VidentePreferences.getAnnounceUppercase(this)
+        announceSpellingExample = VidentePreferences.getAnnounceSpellingExample(this)
+        announceKeyboardExploration = VidentePreferences.getAnnounceKeyboardExploration(this)
     }
 
     /**
@@ -1399,6 +1404,17 @@ class VidenteAccessibilityService :
         }
         val toSpeak = if (boundary != null) "$boundary. $text" else text
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_HOVER_ENTER) {
+            // Ajuste configurable: explorar el teclado en pantalla con el
+            // dedo, sin escuchar cada tecla, para quien prefiera solo oír la
+            // letra al confirmarla. El resto de la función (foco, cursor,
+            // dedup) ya corrió arriba, sin cambios: solo se salta el habla.
+            val onKeyboardKey = keyboardVisible && event.packageName?.toString() in imePackages
+            if (!announceKeyboardExploration && onKeyboardKey) {
+                pendingHoverSpeakRunnable?.let { mainHandler.removeCallbacks(it) }
+                pendingHoverSpeakRunnable = null
+                return
+            }
+
             // Explorar arrastrando el dedo: si se pasa rápido por varios
             // elementos, cada hover cancela el anuncio pendiente del
             // anterior y solo se dice el que el dedo alcanza a "asentarse"
@@ -1948,7 +1964,39 @@ class VidenteAccessibilityService :
                 done
             }
             GestureAction.GO_RECENTS -> performSystemGestureAction(GLOBAL_ACTION_RECENTS, R.string.spoken_recents)
+            GestureAction.CYCLE_TTS_ENGINE -> {
+                cycleTtsEngine()
+                true
+            }
         }
+    }
+
+    /**
+     * Pasa al siguiente motor de TTS instalado para la voz PRINCIPAL (la
+     * secundaria de avisos puntuales no se toca: alternar cuál de las dos
+     * lee normalmente haría que un aviso puntual pudiera pisarse con la
+     * lectura, justo lo que el diseño de las dos voces separadas evita).
+     *
+     * Reutiliza el mismo mecanismo que ya usa el Spinner de motor en
+     * Ajustes: guardar el paquete elegido dispara sola la reconstrucción del
+     * TTS principal (ver onSharedPreferenceChanged). El aviso de qué motor
+     * quedó elegido se dice por la voz SECUNDARIA a propósito: la principal
+     * puede tardar un instante en reiniciar con el motor nuevo, y así el
+     * aviso se escucha siempre, sin depender de ese reinicio.
+     */
+    private fun cycleTtsEngine() {
+        val engine = tts ?: return
+        val installed = engine.engines ?: return
+        if (installed.isEmpty()) return
+        // null representa "predeterminado del sistema", igual que en Ajustes.
+        val packages: List<String?> = listOf(null) + installed.map { it.name }
+        val current = VidentePreferences.getEnginePackage(this)
+        val currentIndex = packages.indexOf(current).coerceAtLeast(0)
+        val next = packages[(currentIndex + 1) % packages.size]
+        VidentePreferences.setEnginePackage(this, next)
+        val label = installed.firstOrNull { it.name == next }?.label
+            ?: getString(R.string.settings_engine_system_default)
+        speakSecondary(getString(R.string.spoken_tts_engine_changed, label))
     }
 
     /** GO_HOME/GO_BACK/GO_RECENTS: acción global del sistema + aviso hablado si se pudo. */
@@ -2157,6 +2205,35 @@ class VidenteAccessibilityService :
             ch.toString()
         }
 
+    /**
+     * Igual que withUppercaseAnnounced, pero suma además la palabra de
+     * ejemplo al deletrear ("A, de Antonio" / "A, as in Alpha", ajuste
+     * configurable, desactivado por defecto): alfabeto telefónico español o
+     * alfabeto NATO en inglés, listas fijas embebidas -- convenciones
+     * públicas de toda la vida, no de ninguna app puntual.
+     *
+     * Solo se usa al teclear un carácter suelto y al explorar letra por
+     * letra (P7): moverse con flechas dentro de un texto puede recorrer
+     * muchos caracteres seguidos rápido, y ahí sería demasiado. Por eso ese
+     * camino (handleTextSelectionChanged) sigue usando withUppercaseAnnounced
+     * directamente, sin pasar por acá.
+     */
+    private fun withSpellingAnnounced(ch: Char): String {
+        val base = withUppercaseAnnounced(ch)
+        if (!announceSpellingExample) return base
+        val example = spellingExampleFor(ch) ?: return base
+        return getString(R.string.spoken_spelling_example, base, example)
+    }
+
+    private fun spellingExampleFor(ch: Char): String? {
+        val table = if (LocaleHelper.currentLocale(this).language == "es") {
+            SPELLING_EXAMPLES_ES
+        } else {
+            SPELLING_EXAMPLES_EN
+        }
+        return table[ch.uppercaseChar()]
+    }
+
     private fun handleTextTraversed(event: AccessibilityEvent) {
         val full = event.text?.joinToString("") ?: return
         val from = event.fromIndex
@@ -2169,7 +2246,7 @@ class VidenteAccessibilityService :
             // carácter (P7): no tendría sentido antes de leer una palabra,
             // línea o párrafo entero.
             val toSpeak = if (navMode == NavMode.CHARACTER && piece.length == 1) {
-                withUppercaseAnnounced(piece[0])
+                withSpellingAnnounced(piece[0])
             } else {
                 piece
             }
@@ -2259,7 +2336,7 @@ class VidenteAccessibilityService :
         if (echoChars) {
             when {
                 addedText.length == 1 && !addedText[0].isWhitespace() ->
-                    speak(withUppercaseAnnounced(addedText[0]))
+                    speak(withSpellingAnnounced(addedText[0]))
                 addedText.length > 1 ->
                     speak(addedText.take(TYPING_ECHO_MAX_CHARS).trim().ifBlank { getString(R.string.spoken_space) })
             }
@@ -3030,6 +3107,31 @@ class VidenteAccessibilityService :
         private const val HOVER_SPEAK_DEBOUNCE_MS = 90L
         private const val DELETE_ECHO_DEBOUNCE_MS = 200L
         private const val DUCKING_RELEASE_DELAY_MS = 500L
+
+        // Alfabeto telefónico español, el de toda la vida (el mismo que usan
+        // bancos y operadores por teléfono en España) -- no es propiedad de
+        // ninguna app puntual.
+        private val SPELLING_EXAMPLES_ES = mapOf(
+            'A' to "Antonio", 'B' to "Barcelona", 'C' to "Carmen", 'D' to "Dolores",
+            'E' to "Enrique", 'F' to "Francia", 'G' to "Gerona", 'H' to "Historia",
+            'I' to "Inés", 'J' to "José", 'K' to "Kilo", 'L' to "Lorenzo",
+            'M' to "Madrid", 'N' to "Navarra", 'Ñ' to "Ñoño", 'O' to "Oviedo",
+            'P' to "París", 'Q' to "Queso", 'R' to "Ramón", 'S' to "Sábado",
+            'T' to "Tarragona", 'U' to "Ulises", 'V' to "Valencia", 'W' to "Washington",
+            'X' to "Xiquena", 'Y' to "Yegua", 'Z' to "Zaragoza"
+        )
+
+        // Alfabeto NATO/ICAO, el estándar público de toda la vida para
+        // deletrear en inglés.
+        private val SPELLING_EXAMPLES_EN = mapOf(
+            'A' to "Alpha", 'B' to "Bravo", 'C' to "Charlie", 'D' to "Delta",
+            'E' to "Echo", 'F' to "Foxtrot", 'G' to "Golf", 'H' to "Hotel",
+            'I' to "India", 'J' to "Juliett", 'K' to "Kilo", 'L' to "Lima",
+            'M' to "Mike", 'N' to "November", 'O' to "Oscar", 'P' to "Papa",
+            'Q' to "Quebec", 'R' to "Romeo", 'S' to "Sierra", 'T' to "Tango",
+            'U' to "Uniform", 'V' to "Victor", 'W' to "Whiskey", 'X' to "X-ray",
+            'Y' to "Yankee", 'Z' to "Zulu"
+        )
         // Vibración de exploración: muy corta y suave, para que no moleste al
         // recorrer la pantalla ni se solape con la voz.
         private const val HOVER_VIBRATION_MS = 28L
