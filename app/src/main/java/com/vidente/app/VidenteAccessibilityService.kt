@@ -468,17 +468,8 @@ class VidenteAccessibilityService :
                 .setOnAudioFocusChangeListener { }
                 .build()
             try {
-                val result = audioManager.requestAudioFocus(request)
+                audioManager.requestAudioFocus(request)
                 audioFocusRequest = request
-                // DIAGNÓSTICO TEMPORAL (bug 3): confirma si Android concede
-                // el ducking. Sacar este speakSecondary una vez cerrado el bug.
-                speakSecondary(
-                    "Diag ducking: " + when (result) {
-                        AudioManager.AUDIOFOCUS_REQUEST_GRANTED -> "concedido"
-                        AudioManager.AUDIOFOCUS_REQUEST_FAILED -> "fallido"
-                        else -> "demorado"
-                    }
-                )
             } catch (e: Exception) {
                 Log.w(TAG, "No se pudo pedir audio focus para el ducking", e)
             }
@@ -1791,15 +1782,10 @@ class VidenteAccessibilityService :
             // reversión en el mismo eje (izquierda-y-derecha), que ya se supo
             // que Android no reconoce bien en esta app.
             GESTURE_SWIPE_UP_AND_LEFT -> {
-                // DIAGNÓSTICO TEMPORAL (bug 1): confirma que Android
-                // reconoce este gesto compuesto. Sacar esta línea una vez
-                // cerrado el bug.
-                speakSecondary("Diag: gesto arriba izquierda detectado")
                 moveCursorToFieldBoundary(toStart = true)
                 return true
             }
             GESTURE_SWIPE_UP_AND_RIGHT -> {
-                speakSecondary("Diag: gesto arriba derecha detectado")
                 moveCursorToFieldBoundary(toStart = false)
                 return true
             }
@@ -1936,21 +1922,11 @@ class VidenteAccessibilityService :
      * mecanismo que ya usa el eco de escritura) para no anunciarlo dos veces.
      */
     private fun moveCursorToFieldBoundary(toStart: Boolean): Boolean {
-        // DIAGNÓSTICO TEMPORAL (bug 1): un aviso por voz secundaria en cada
-        // punto en el que esta función podría fallar en silencio. Sacar
-        // todas las líneas marcadas una vez cerrado el bug.
-        val root = rootInActiveWindow ?: run {
-            speakSecondary("Diag: sin rootInActiveWindow")
-            return false
-        }
+        val root = rootInActiveWindow ?: return false
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
         root.recycle()
-        if (focused == null) {
-            speakSecondary("Diag: sin nodo con foco de accesibilidad")
-            return false
-        }
+        focused ?: return false
         if (!focused.isEditable) {
-            speakSecondary("Diag: el nodo con foco no es editable")
             focused.recycle()
             return false
         }
@@ -1962,7 +1938,6 @@ class VidenteAccessibilityService :
         }
         suppressCursorEchoUntil = SystemClock.uptimeMillis() + CURSOR_ECHO_SUPPRESS_MS
         val done = focused.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, args)
-        if (!done) speakSecondary("Diag: ACTION_SET_SELECTION rechazada")
         focused.recycle()
         if (done) {
             lastCursorIndex = index
