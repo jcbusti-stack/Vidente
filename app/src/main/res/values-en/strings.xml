@@ -41,6 +41,7 @@
     <string name="settings_gestures_reset">Restore the default gestures</string>
     <string name="settings_gestures_reset_done">Gestures restored</string>
     <string name="gesture_none">No gesture assigned</string>
+    <string name="settings_gesture_row_description">%1$s, %2$s</string>
     <string name="gesture_double_tap">Double tap</string>
     <string name="gesture_swipe_right">Swipe right</string>
     <string name="gesture_swipe_left">Swipe left</string>

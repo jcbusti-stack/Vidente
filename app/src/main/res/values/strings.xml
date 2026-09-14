@@ -41,6 +41,7 @@
     <string name="settings_gestures_reset">Restaurar los gestos predeterminados</string>
     <string name="settings_gestures_reset_done">Gestos restaurados</string>
     <string name="gesture_none">Sin gesto asignado</string>
+    <string name="settings_gesture_row_description">%1$s, %2$s</string>
     <string name="gesture_double_tap">Doble toque</string>
     <string name="gesture_swipe_right">Deslizar a la derecha</string>
     <string name="gesture_swipe_left">Deslizar a la izquierda</string>

@@ -144,6 +144,24 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         tts = if (enginePackage != null) TextToSpeech(this, this, enginePackage) else TextToSpeech(this, this)
     }
 
+    /**
+     * Adaptador para TODOS los Spinner de Ajustes, con vistas de texto plano.
+     *
+     * android.R.layout.simple_spinner_dropdown_item es un CheckedTextView
+     * (verificado en el código del SDK de Android), así que usarlo como vista
+     * principal del adaptador convertía cada Spinner cerrado en algo
+     * "marcable": Vidente lo leía como "casilla, activado/desactivado", y en
+     * la lista abierta cada opción sumaba además "seleccionado". Nada de eso
+     * describe lo que el control hace realmente.
+     *
+     * simple_spinner_item (vista cerrada) y simple_list_item_1 (opciones de
+     * la lista) son TextView planos: sin estado de marcado que anunciar.
+     */
+    private fun plainSpinnerAdapter(labels: List<String>): ArrayAdapter<String> =
+        ArrayAdapter(this, android.R.layout.simple_spinner_item, labels).apply {
+            setDropDownViewResource(android.R.layout.simple_list_item_1)
+        }
+
     /** Etiquetas y paquetes de los motores de TTS instalados, con "Predeterminado del sistema" primero. */
     private fun engineLabelsAndPackages(engine: TextToSpeech): Pair<List<String>, List<String?>> {
         val labels = mutableListOf(getString(R.string.settings_engine_system_default))
@@ -160,7 +178,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         val engine = tts ?: return
         val (labels, packages) = engineLabelsAndPackages(engine)
         enginePackages = packages
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.adapter = plainSpinnerAdapter(labels)
         val saved = VidentePreferences.getEnginePackage(this)
         spinner.setSelection(packages.indexOf(saved).coerceAtLeast(0))
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -192,7 +210,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
             getString(R.string.language_name_pt),
             getString(R.string.language_name_it)
         )
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.adapter = plainSpinnerAdapter(labels)
         spinner.setSelection(languageValues.indexOf(VidentePreferences.getAppLanguage(this)).coerceAtLeast(0))
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
@@ -317,7 +335,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         val labels = mutableListOf(getString(R.string.settings_voice_auto))
         labels += availableVoices.map { VoiceUtils.displayName(it) }
 
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.adapter = plainSpinnerAdapter(labels)
 
         val savedVoiceName = VidentePreferences.getVoiceName(this)
         val savedIndex = availableVoices.indexOfFirst { it.name == savedVoiceName }
@@ -383,7 +401,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         val engine = ttsSecondary ?: return
         val (labels, packages) = engineLabelsAndPackages(engine)
         secondaryEnginePackages = packages
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.adapter = plainSpinnerAdapter(labels)
         val saved = VidentePreferences.getSecondaryEnginePackage(this)
         spinner.setSelection(packages.indexOf(saved).coerceAtLeast(0))
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -403,7 +421,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         val spinner = spinnerVoiceSecondary ?: return
         val labels = mutableListOf(getString(R.string.settings_voice_auto))
         labels += secondaryAvailableVoices.map { VoiceUtils.displayName(it) }
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        spinner.adapter = plainSpinnerAdapter(labels)
 
         val savedVoiceName = VidentePreferences.getSecondaryVoiceName(this)
         val savedIndex = secondaryAvailableVoices.indexOfFirst { it.name == savedVoiceName }
@@ -639,20 +657,30 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
             val label = TextView(this).apply {
                 text = actionLabel
                 textSize = 16f
+                // Visible para quien ve la pantalla, pero fuera del árbol de
+                // accesibilidad: el nombre de la acción ya va en la
+                // descripción del Spinner de abajo, y si no habría que pasar
+                // por dos elementos que dicen casi lo mismo.
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }
             container.addView(label)
 
+            val current = GestureConfig.gestureForAction(currentGestureMap(), action.name)
+            val currentIndex = gestureIds.indexOf(current).coerceAtLeast(0)
+
             val spinner = Spinner(this).apply {
-                // Sin esto, el lector de pantalla anunciaría solo el gesto
-                // elegido, sin decir de qué acción se trata.
-                contentDescription = actionLabel
-                adapter = ArrayAdapter(
-                    this@SettingsSectionActivity,
-                    android.R.layout.simple_spinner_dropdown_item,
-                    gestureLabels
+                // El anuncio dice la acción Y el gesto que tiene asignado
+                // ("Repetir la última frase, deslizar arriba y volver
+                // abajo"): poner solo el nombre de la acción dejaba al
+                // usuario sin saber cuál era el gesto actual, porque una
+                // descripción en el Spinner tapa el texto de su contenido.
+                contentDescription = getString(
+                    R.string.settings_gesture_row_description,
+                    actionLabel,
+                    gestureLabels[currentIndex]
                 )
-                val current = GestureConfig.gestureForAction(currentGestureMap(), action.name)
-                setSelection(gestureIds.indexOf(current).coerceAtLeast(0))
+                adapter = plainSpinnerAdapter(gestureLabels)
+                setSelection(currentIndex)
                 onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                     override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
                         val chosen = gestureIds.getOrNull(position)
