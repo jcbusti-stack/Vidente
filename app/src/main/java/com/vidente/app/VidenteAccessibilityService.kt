@@ -76,6 +76,12 @@ class VidenteAccessibilityService :
     // Copia del último elemento que Vidente leyó; ancla de respaldo para P5.
     private var lastFocusedNode: AccessibilityNodeInfo? = null
     private var lastFocusedNodeAt = 0L
+    // El gesto que se está ejecutando viene justo después de un toque directo
+    // en la pantalla. Lo anota onGesture antes de limpiar lastHoverAt; lo usa
+    // moveAccessibilityFocus para anclarse en el elemento que el usuario acaba
+    // de escuchar en vez de en el foco del sistema, que recién después de un
+    // toque todavía no es de fiar.
+    private var gestureFollowsRecentHover = false
     // Penúltimo elemento leído. El segundo toque del doble toque vuelve a
     // generar exploración: si cae un pelo desviado, el sistema anuncia la tecla
     // vecina y esa pasaría a ser "la actual" justo antes de activar. Cuando el
@@ -1889,6 +1895,13 @@ class VidenteAccessibilityService :
         // Cualquier otro gesto releva al dedo: a partir de aquí los eventos de
         // foco vuelven a mandar (si no, tras explorar, el elemento al que salta
         // "siguiente/anterior" no se leería durante el margen del hover).
+        //
+        // Pero ANTES de borrar esa marca se anota si el usuario venía de tocar
+        // la pantalla recién: moveAccessibilityFocus la necesita para saber
+        // desde qué elemento seguir. Al borrarla acá y recién después ejecutar
+        // la acción, ese dato se perdía y el primer deslizamiento después de un
+        // toque se quedaba sin ancla (ver gestureFollowsRecentHover).
+        gestureFollowsRecentHover = SystemClock.uptimeMillis() - lastHoverAt < HOVER_OWNS_FOCUS_MS
         lastHoverAt = 0L
 
         val gestureAction = gestureActionMap[gestureId] ?: return false
@@ -1971,7 +1984,19 @@ class VidenteAccessibilityService :
         root.recycle()
         if (nodes.isEmpty()) return
 
-        val focusedIdx = nodes.indexOfFirst { it.isAccessibilityFocused }
+        // Mismo criterio que el resto de la navegación (ver
+        // currentNavigationAnchor): si el foco del sistema no está puesto
+        // -- lo típico justo después de un toque directo --, se arranca
+        // desde el elemento que el usuario acaba de escuchar, no desde el
+        // principio de la pantalla.
+        var focusedIdx = nodes.indexOfFirst { it.isAccessibilityFocused }
+        if (focusedIdx < 0) {
+            val fallback = currentNavigationAnchor()
+            if (fallback != null) {
+                focusedIdx = nodes.indexOfFirst { it == fallback }
+                fallback.recycle()
+            }
+        }
         val start = if (focusedIdx >= 0) focusedIdx else 0
         continuousLines = nodes.drop(start).mapNotNull { describeForSpeech(it) }
         nodes.forEach { it.recycle() }
@@ -2061,10 +2086,7 @@ class VidenteAccessibilityService :
      * mecanismo que ya usa el eco de escritura) para no anunciarlo dos veces.
      */
     private fun moveCursorToFieldBoundary(toStart: Boolean): Boolean {
-        val root = rootInActiveWindow ?: return false
-        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
-        root.recycle()
-        focused ?: return false
+        val focused = currentNavigationAnchor() ?: return false
         if (!focused.isEditable) {
             focused.recycle()
             return false
@@ -2091,10 +2113,7 @@ class VidenteAccessibilityService :
      * del evento que dispara la acción.
      */
     private fun moveByGranularity(granularity: Int, forward: Boolean): Boolean {
-        val root = rootInActiveWindow ?: return false
-        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
-        root.recycle()
-        focused ?: return false
+        val focused = currentNavigationAnchor() ?: return false
 
         val supported = (focused.movementGranularities and granularity) != 0
         if (!supported) {
@@ -2369,7 +2388,19 @@ class VidenteAccessibilityService :
         root.recycle()
         if (all.isEmpty()) return false
 
-        val anchor = all.indexOfFirst { it.isAccessibilityFocused }
+        // isAccessibilityFocused mira el foco del sistema, que justo después
+        // de un toque directo todavía no es de fiar: en ese caso se ubica al
+        // elemento que el usuario acaba de escuchar, para no empezar a buscar
+        // desde el principio de la pantalla (mismo criterio que el resto de
+        // los modos de navegación, ver currentNavigationAnchor).
+        var anchor = all.indexOfFirst { it.isAccessibilityFocused }
+        if (anchor < 0) {
+            val fallback = currentNavigationAnchor()
+            if (fallback != null) {
+                anchor = all.indexOfFirst { it == fallback }
+                fallback.recycle()
+            }
+        }
         val n = all.size
         var found = -1
         var crossed = false
@@ -2475,16 +2506,44 @@ class VidenteAccessibilityService :
      * también en apps (React Native: Claude, Grok) donde comparar nodos por
      * identidad falla.
      */
+    /** Copia utilizable del último elemento que Vidente leyó, o null si ya no vale. */
+    @Suppress("DEPRECATION")
+    private fun anchorFromLastFocusedNode(): AccessibilityNodeInfo? {
+        val lf = lastFocusedNode ?: return null
+        val ok = try { lf.refresh() } catch (e: Exception) { false }
+        if (!ok) return null
+        return try { AccessibilityNodeInfo.obtain(lf) } catch (e: Exception) { null }
+    }
+
+    /**
+     * "Desde dónde" arranca cualquier gesto de navegación. Lo usan todos los
+     * modos (elemento, granularidad de texto, saltar por tipo y cursor a los
+     * bordes) para no volver a tener el mismo fallo en unos y no en otros.
+     *
+     * Si el gesto viene justo después de un toque directo, manda el elemento
+     * que el usuario acaba de escuchar: el foco del sistema todavía no es de
+     * fiar en ese instante. Si no, se busca el foco real en todas las
+     * ventanas (no solo en la activa), y como último recurso se usa igual el
+     * último elemento leído.
+     */
+    private fun currentNavigationAnchor(): AccessibilityNodeInfo? {
+        if (gestureFollowsRecentHover) anchorFromLastFocusedNode()?.let { return it }
+        findAccessibilityFocusedNodeAcrossWindows()?.let { return it }
+        return anchorFromLastFocusedNode()
+    }
+
     @Suppress("DEPRECATION")
     private fun moveAccessibilityFocus(forward: Boolean): Boolean {
         val root = rootInActiveWindow ?: return false
-        var anchor: AccessibilityNodeInfo? = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
-        if (anchor == null) {
-            val lf = lastFocusedNode
-            if (lf != null && (try { lf.refresh() } catch (e: Exception) { false })) {
-                anchor = AccessibilityNodeInfo.obtain(lf)
-            }
-        }
+
+        // Si el usuario acaba de tocar la pantalla, el elemento que escuchó
+        // manda sobre el foco del sistema: justo después de un toque ese foco
+        // todavía no es de fiar, y quedarse sin ancla hacía que el recorrido
+        // se fuera al principio (o al final) de la pantalla en vez de al
+        // elemento contiguo. Es el mismo criterio que ya usaba
+        // activateFocusedElement para el doble toque; este camino se había
+        // quedado sin él.
+        val anchor: AccessibilityNodeInfo? = currentNavigationAnchor()
 
         treeWalkBudget = TREE_WALK_BUDGET
         var wrapped = false

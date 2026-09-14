@@ -37,10 +37,9 @@
     <string name="settings_section_gestures">Gestures</string>
     <string name="settings_section_general">General settings</string>
     <string name="settings_back">Back to Settings</string>
-    <string name="settings_gestures_intro">Choose which gesture triggers each action. If you assign a gesture that was already in use, the action that had it is left with no gesture assigned.</string>
+    <string name="settings_gestures_intro">Choose which action each gesture triggers. Several gestures can do the same thing if you want.</string>
     <string name="settings_gestures_reset">Restore the default gestures</string>
     <string name="settings_gestures_reset_done">Gestures restored</string>
-    <string name="gesture_none">No gesture assigned</string>
     <string name="gesture_action_none">No action assigned</string>
     <string name="settings_gesture_row_description">%1$s, %2$s</string>
     <string name="gesture_double_tap">Double tap</string>

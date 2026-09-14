@@ -37,10 +37,9 @@
     <string name="settings_section_gestures">Gestos</string>
     <string name="settings_section_general">Ajustes generales</string>
     <string name="settings_back">Volver a Ajustes</string>
-    <string name="settings_gestures_intro">Elige qué gesto dispara cada acción. Si asignas un gesto que ya estaba en uso, la acción que lo tenía queda sin gesto asignado.</string>
+    <string name="settings_gestures_intro">Elige qué acción dispara cada gesto. Varios gestos pueden hacer lo mismo si quieres.</string>
     <string name="settings_gestures_reset">Restaurar los gestos predeterminados</string>
     <string name="settings_gestures_reset_done">Gestos restaurados</string>
-    <string name="gesture_none">Sin gesto asignado</string>
     <string name="gesture_action_none">Sin acción asignada</string>
     <string name="settings_gesture_row_description">%1$s, %2$s</string>
     <string name="gesture_double_tap">Doble toque</string>
