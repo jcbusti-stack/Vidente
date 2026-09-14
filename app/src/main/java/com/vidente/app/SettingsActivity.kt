@@ -27,6 +27,7 @@ class SettingsActivity : AppCompatActivity() {
         openSection(R.id.buttonSectionSound, SettingsSectionActivity.SECTION_SOUND)
         openSection(R.id.buttonSectionTutorial, SettingsSectionActivity.SECTION_TUTORIAL)
         openSection(R.id.buttonSectionConversational, SettingsSectionActivity.SECTION_CONVERSATIONAL)
+        openSection(R.id.buttonSectionGestures, SettingsSectionActivity.SECTION_GESTURES)
         openSection(R.id.buttonSectionGeneral, SettingsSectionActivity.SECTION_GENERAL)
     }
 

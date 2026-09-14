@@ -3,6 +3,7 @@ package com.vidente.app
 import android.content.Context
 import android.content.SharedPreferences
 import java.util.UUID
+import org.json.JSONObject
 
 object VidentePreferences {
     const val PREFS_NAME = "vidente_prefs"
@@ -95,6 +96,13 @@ object VidentePreferences {
     // TalkBack.
     const val KEY_ANNOUNCE_UPPERCASE = "announce_uppercase"
     const val DEFAULT_ANNOUNCE_UPPERCASE = true
+
+    // Configuración de gestos (paso 2 de "gestos personalizables"): qué
+    // acción dispara cada gesto. Se guarda como texto (JSON de
+    // gesto -> nombre de la acción) porque SharedPreferences no admite
+    // mapas directamente. Sin pantalla propia todavía: por ahora solo
+    // guarda los valores por defecto.
+    const val KEY_GESTURE_ACTION_MAP = "gesture_action_map"
 
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
@@ -303,6 +311,41 @@ object VidentePreferences {
 
     fun setAnnounceUppercase(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_ANNOUNCE_UPPERCASE, enabled).apply()
+    }
+
+    /**
+     * Mapa gesto -> nombre de acción guardado, o null si todavía no se guardó
+     * nada (primera vez) o si lo guardado no se pudo interpretar (dato
+     * corrupto, o de una versión vieja/nueva incompatible). Devuelve null y
+     * no un mapa vacío a propósito: un mapa vacío es un estado válido y
+     * distinto (el usuario dejó TODAS las acciones sin gesto asignado), y
+     * confundirlo con "no hay nada guardado" haría que los valores por
+     * defecto volvieran solos en el próximo arranque.
+     *
+     * Este objeto no conoce el enum de acciones de
+     * VidenteAccessibilityService (igual que no conoce NavMode ni el resto):
+     * trabaja solo con texto, y es quien llama el que convierte a su propio
+     * tipo.
+     */
+    fun getGestureActionMap(context: Context): Map<Int, String>? {
+        val raw = prefs(context).getString(KEY_GESTURE_ACTION_MAP, null) ?: return null
+        return try {
+            val json = JSONObject(raw)
+            val result = mutableMapOf<Int, String>()
+            json.keys().forEach { key ->
+                val gestureId = key.toIntOrNull()
+                if (gestureId != null) result[gestureId] = json.getString(key)
+            }
+            result
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun setGestureActionMap(context: Context, map: Map<Int, String>) {
+        val json = JSONObject()
+        map.forEach { (gestureId, actionName) -> json.put(gestureId.toString(), actionName) }
+        prefs(context).edit().putString(KEY_GESTURE_ACTION_MAP, json.toString()).apply()
     }
 
     /**

@@ -15,6 +15,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.RadioGroup
 import android.widget.Spinner
@@ -97,6 +98,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
             SECTION_SOUND -> { titleRes = R.string.settings_section_sound; layoutRes = R.layout.section_sound }
             SECTION_TUTORIAL -> { titleRes = R.string.settings_section_tutorial; layoutRes = R.layout.section_tutorial }
             SECTION_CONVERSATIONAL -> { titleRes = R.string.settings_section_conversational; layoutRes = R.layout.section_conversational }
+            SECTION_GESTURES -> { titleRes = R.string.settings_section_gestures; layoutRes = R.layout.section_gestures }
             SECTION_GENERAL -> { titleRes = R.string.settings_section_general; layoutRes = R.layout.section_general }
             else -> { titleRes = R.string.settings_section_voice; layoutRes = R.layout.section_voice }
         }
@@ -111,6 +113,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
             SECTION_SOUND -> setUpSoundSection()
             SECTION_TUTORIAL -> setUpTutorialSection()
             SECTION_CONVERSATIONAL -> setUpConversationalSection()
+            SECTION_GESTURES -> setUpGesturesSection()
             SECTION_GENERAL -> setUpGeneralSection()
         }
     }
@@ -591,6 +594,98 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         }
     }
 
+    // ---- Gestos ----
+
+    /**
+     * Una fila por acción (etiqueta + Spinner con los gestos disponibles),
+     * armadas a partir de GestureConfig.ACTIONS en vez de estar escritas en
+     * el XML: así la pantalla no puede quedar desincronizada de la lista real
+     * de acciones si en el futuro se agrega o saca alguna.
+     *
+     * Se usa Spinner (y no casillas ni RadioGroup) porque cada acción elige
+     * entre una lista larga -- 11 gestos más "Sin gesto asignado".
+     */
+    private fun setUpGesturesSection() {
+        renderGestureRows()
+        findViewById<Button>(R.id.buttonResetGestures).setOnClickListener {
+            VidentePreferences.setGestureActionMap(this, GestureConfig.DEFAULT_MAP)
+            renderGestureRows()
+            Toast.makeText(this, R.string.settings_gestures_reset_done, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Mapa actual para mostrar: si el servicio nunca llegó a guardarlo
+     * (Ajustes abierto antes de activar Vidente por primera vez), se muestran
+     * los valores por defecto en vez de una pantalla con todo sin asignar.
+     */
+    private fun currentGestureMap(): Map<Int, String> =
+        VidentePreferences.getGestureActionMap(this) ?: GestureConfig.DEFAULT_MAP
+
+    private fun renderGestureRows() {
+        val container = findViewById<LinearLayout>(R.id.containerGestures) ?: return
+        container.removeAllViews()
+
+        // "Sin gesto asignado" va primero: es la opción que deja la acción
+        // sin disparador, y también lo que se muestra si otra acción le robó
+        // el gesto.
+        val gestureLabels = listOf(getString(R.string.gesture_none)) +
+            GestureConfig.GESTURES.map { getString(it.labelRes) }
+        val gestureIds: List<Int?> = listOf(null) + GestureConfig.GESTURES.map { it.id }
+
+        GestureConfig.ACTIONS.forEach { action ->
+            val actionLabel = getString(action.labelRes)
+
+            val label = TextView(this).apply {
+                text = actionLabel
+                textSize = 16f
+            }
+            container.addView(label)
+
+            val spinner = Spinner(this).apply {
+                // Sin esto, el lector de pantalla anunciaría solo el gesto
+                // elegido, sin decir de qué acción se trata.
+                contentDescription = actionLabel
+                adapter = ArrayAdapter(
+                    this@SettingsSectionActivity,
+                    android.R.layout.simple_spinner_dropdown_item,
+                    gestureLabels
+                )
+                val current = GestureConfig.gestureForAction(currentGestureMap(), action.name)
+                setSelection(gestureIds.indexOf(current).coerceAtLeast(0))
+                onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                        val chosen = gestureIds.getOrNull(position)
+                        val saved = currentGestureMap()
+                        // El propio setSelection de arriba dispara este
+                        // callback: sin esta comparación, abrir la pantalla
+                        // reescribiría el mapa (y podría reordenarlo) sin que
+                        // el usuario haya tocado nada.
+                        if (chosen == GestureConfig.gestureForAction(saved, action.name)) return
+                        val updated = GestureConfig.withAssignment(saved, action.name, chosen)
+                        VidentePreferences.setGestureActionMap(this@SettingsSectionActivity, updated)
+                        // Otra acción pudo quedar sin gesto al cedérselo a
+                        // esta: se redibuja todo para que cada Spinner muestre
+                        // el estado real. Diferido con post: este callback
+                        // viene del propio Spinner que se va a eliminar al
+                        // redibujar, y no conviene tocar la jerarquía de
+                        // vistas mientras responde.
+                        container.post { renderGestureRows() }
+                    }
+
+                    override fun onNothingSelected(parent: AdapterView<*>) {}
+                }
+            }
+            container.addView(
+                spinner,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = (24 * resources.displayMetrics.density).toInt() }
+            )
+        }
+    }
+
     // ---- Ajustes generales ----
 
     private fun setUpGeneralSection() {
@@ -631,6 +726,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         VidentePreferences.setKeyboardWriteMode(this, VidentePreferences.DEFAULT_KEYBOARD_WRITE_MODE)
         VidentePreferences.setCursorAnnounce(this, VidentePreferences.DEFAULT_CURSOR_ANNOUNCE)
         VidentePreferences.setAnnounceUppercase(this, VidentePreferences.DEFAULT_ANNOUNCE_UPPERCASE)
+        VidentePreferences.setGestureActionMap(this, GestureConfig.DEFAULT_MAP)
         Toast.makeText(this, R.string.settings_reset_done, Toast.LENGTH_SHORT).show()
     }
 
@@ -652,6 +748,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         const val SECTION_SOUND = "sound"
         const val SECTION_TUTORIAL = "tutorial"
         const val SECTION_CONVERSATIONAL = "conversational"
+        const val SECTION_GESTURES = "gestures"
         const val SECTION_GENERAL = "general"
 
         private const val SEEK_STEPS = 100

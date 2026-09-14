@@ -137,6 +137,93 @@ class VidenteAccessibilityService :
         listOf(GESTURE_SWIPE_UP, GESTURE_SWIPE_DOWN_AND_LEFT, GESTURE_SWIPE_DOWN_AND_RIGHT)
     private val READING_GESTURES = listOf(GESTURE_SWIPE_DOWN_AND_UP, GESTURE_SWIPE_UP_AND_DOWN)
 
+    /**
+     * Configuración de gestos (Paso 1: solo reorganización interna, sin
+     * pantalla propia todavía). Cada acción que Vidente sabe ejecutar por un
+     * gesto de un dedo, listada una sola vez acá en vez de quedar repartida
+     * (y "quemada") dentro de onGesture(). El mapa de abajo dice qué gesto la
+     * dispara hoy; en un paso futuro ese mapa va a poder cargarse desde
+     * Ajustes en vez de quedar fijo en los valores por defecto.
+     *
+     * El doble toque conserva su regla histórica de "consumir siempre" (ver
+     * el comentario de la tecla de borrar trabada en onGesture), pero QUÉ
+     * hace ya sale de este mapa como cualquier otro gesto: esa regla es del
+     * gesto en sí, no de la acción que tenga asignada.
+     */
+    private enum class GestureAction {
+        ACTIVATE,
+        NEXT,
+        PREVIOUS,
+        CYCLE_NAV_MODE,
+        START_CONTINUOUS_READING,
+        REPEAT_LAST_PHRASE,
+        GO_HOME,
+        GO_BACK,
+        GO_RECENTS,
+        CURSOR_TO_FIELD_START,
+        CURSOR_TO_FIELD_END
+    }
+
+    // Los valores por defecto viven en GestureConfig, compartidos con la
+    // pantalla de Ajustes, para que las dos listas no se desincronicen.
+    private fun defaultGestureActionMap(): Map<Int, GestureAction> =
+        GestureConfig.DEFAULT_MAP.mapNotNull { (gestureId, actionName) ->
+            gestureActionOf(actionName)?.let { gestureId to it }
+        }.toMap()
+
+    private fun gestureActionOf(actionName: String): GestureAction? = try {
+        GestureAction.valueOf(actionName)
+    } catch (e: Exception) {
+        null
+    }
+
+    // Var (no val): se reemplaza por loadGestureActionMap() apenas arranca
+    // el servicio (ver onServiceConnected); este valor inicial es solo por
+    // si algo llega a leerla antes de esa primera carga.
+    private var gestureActionMap: Map<Int, GestureAction> = defaultGestureActionMap()
+
+    /**
+     * Configuración de gestos (paso 2): lee el mapa guardado en
+     * VidentePreferences y lo convierte de texto a GestureAction. Si no hay
+     * nada guardado todavía (primera vez), o si lo guardado no se pudo
+     * interpretar (corrupto, o nombres de una versión vieja/nueva
+     * incompatible), usa y GUARDA los valores por defecto -- así siempre
+     * queda algo concreto en el disco, listo para que el paso 3 (pantalla de
+     * Ajustes) lo lea y modifique en vez de partir de cero.
+     */
+    private fun loadGestureActionMap(): Map<Int, GestureAction> {
+        val saved = VidentePreferences.getGestureActionMap(this)
+        if (saved != null) {
+            // Un mapa vacío es válido (el usuario dejó todas las acciones sin
+            // gesto): se respeta tal cual, no se reemplaza por los valores
+            // por defecto. Solo se descartan entradas sueltas con un nombre
+            // de acción que esta versión no conoce.
+            val parsed = mutableMapOf<Int, GestureAction>()
+            saved.forEach { (gestureId, actionName) ->
+                gestureActionOf(actionName)?.let { parsed[gestureId] = it }
+            }
+            return parsed
+        }
+        val defaults = defaultGestureActionMap()
+        saveGestureActionMap(defaults)
+        return defaults
+    }
+
+    private fun saveGestureActionMap(map: Map<Int, GestureAction>) {
+        VidentePreferences.setGestureActionMap(this, map.mapValues { it.value.name })
+    }
+
+    // Acciones que hoy tienen antirebote de 350 ms (ver isDebounced): las que
+    // se encadenan o alternan estado. Las demás no lo tenían y siguen sin
+    // tenerlo.
+    private val DEBOUNCED_ACTIONS = setOf(
+        GestureAction.NEXT,
+        GestureAction.PREVIOUS,
+        GestureAction.CYCLE_NAV_MODE,
+        GestureAction.START_CONTINUOUS_READING,
+        GestureAction.REPEAT_LAST_PHRASE
+    )
+
     // ---- Lectura continua (P6) ----
     private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile private var continuousReading = false
@@ -689,6 +776,13 @@ class VidenteAccessibilityService :
             VidentePreferences.setTutorialRequested(this, false)
             startTutorial()
         }
+
+        // Paso 2 de gestos personalizables: todavía nada escribe esta clave
+        // (eso es el paso 3), pero queda lista la recarga para cuando
+        // empiece a hacerlo, sin reiniciar el servicio.
+        if (key == VidentePreferences.KEY_GESTURE_ACTION_MAP || key == null) {
+            gestureActionMap = loadGestureActionMap()
+        }
     }
 
     override fun onServiceConnected() {
@@ -697,6 +791,7 @@ class VidenteAccessibilityService :
         refreshLocale()
         refreshImePackages()
         refreshScrollFeedback()
+        gestureActionMap = loadGestureActionMap()
         ensureSoundPool()
         showFloatingButton()
         // onServiceConnected puede volver a llamarse si el sistema reconecta
@@ -1712,6 +1807,10 @@ class VidenteAccessibilityService :
      *   Deslizar arriba y luego derecha   -> cursor al final del campo
      *   Un toque durante la lectura continua -> pausa (P6)
      *
+     * La lista de arriba es solo la configuración POR DEFECTO
+     * (GestureConfig.DEFAULT_MAP): el reparto real sale de gestureActionMap,
+     * que el usuario puede cambiar desde Ajustes -> Gestos.
+     *
      * La clasificación de cada trazo la hace el sistema, no Vidente; no se
      * puede ajustar su tolerancia desde un servicio de accesibilidad sin
      * asumir todo el manejo táctil. Para reducir confusiones se aplica un
@@ -1735,11 +1834,13 @@ class VidenteAccessibilityService :
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && gestureId == GESTURE_DOUBLE_TAP) {
-            activateFocusedElement()
-            // El doble toque se consume SIEMPRE. Si se devolvía false, el
-            // sistema entregaba el toque en crudo a la app: sobre la tecla de
-            // borrar eso equivalía a dejarla pulsada y se disparaba el borrado
-            // repetido ("tecla trabada").
+            // Qué hace el doble toque sale del mapa como cualquier otro
+            // gesto (puede reasignarse desde Ajustes), pero el gesto se
+            // consume SIEMPRE, tenga acción asignada o no: si se devolvía
+            // false, el sistema entregaba el toque en crudo a la app, y
+            // sobre la tecla de borrar eso equivalía a dejarla pulsada, con
+            // el borrado repetido ("tecla trabada").
+            gestureActionMap[gestureId]?.let { runGestureAction(it) }
             return true
         }
 
@@ -1748,61 +1849,57 @@ class VidenteAccessibilityService :
         // "siguiente/anterior" no se leería durante el margen del hover).
         lastHoverAt = 0L
 
-        when (gestureId) {
-            GESTURE_SWIPE_DOWN_AND_UP -> {
-                if (isDebounced(gestureId)) return true
-                startOrResumeContinuousReading()
-                return true
+        val gestureAction = gestureActionMap[gestureId] ?: return false
+
+        // Antirebote: solo para las acciones que ya lo tenían (ver
+        // DEBOUNCED_ACTIONS), atado al gesto físico recibido -- si Android
+        // llega a reportar un solo trazo como dos gestos casi juntos, no se
+        // repite/salta de más.
+        if (gestureAction in DEBOUNCED_ACTIONS && isDebounced(gestureId)) return true
+
+        return runGestureAction(gestureAction)
+    }
+
+    /** Ejecuta una acción de gesto, venga del gesto que venga. */
+    private fun runGestureAction(gestureAction: GestureAction): Boolean {
+        return when (gestureAction) {
+            GestureAction.ACTIVATE -> {
+                activateFocusedElement()
+                true
             }
-            GESTURE_SWIPE_UP_AND_DOWN -> {
-                if (isDebounced(gestureId)) return true
-                repeatLastPhrase()
-                return true
-            }
-            GESTURE_SWIPE_DOWN -> {
-                if (isDebounced(gestureId)) return true
+            GestureAction.NEXT -> moveInMode(forward = true)
+            GestureAction.PREVIOUS -> moveInMode(forward = false)
+            GestureAction.CYCLE_NAV_MODE -> {
                 cycleNavMode()
-                return true
+                true
             }
-            // Mismo resguardo que los demás gestos: si Android llega a
-            // reportar un solo deslizamiento como dos gestos casi juntos, no
-            // se salta dos elementos de una (se sentía como que el foco "se
-            // adelantaba" solo).
-            GESTURE_SWIPE_RIGHT -> {
-                if (isDebounced(gestureId)) return true
-                return moveInMode(forward = true)
+            GestureAction.START_CONTINUOUS_READING -> {
+                startOrResumeContinuousReading()
+                true
             }
-            GESTURE_SWIPE_LEFT -> {
-                if (isDebounced(gestureId)) return true
-                return moveInMode(forward = false)
+            GestureAction.REPEAT_LAST_PHRASE -> {
+                repeatLastPhrase()
+                true
             }
-            // Saltar el cursor al inicio/fin del campo con foco (nuevo): sin
-            // usar hoy, y del mismo tipo de giro de 90° que abajo-y-izquierda
-            // /abajo-y-derecha (ya probados, confiables), a diferencia de una
-            // reversión en el mismo eje (izquierda-y-derecha), que ya se supo
-            // que Android no reconoce bien en esta app.
-            GESTURE_SWIPE_UP_AND_LEFT -> {
-                moveCursorToFieldBoundary(toStart = true)
-                return true
+            GestureAction.CURSOR_TO_FIELD_START -> moveCursorToFieldBoundary(toStart = true)
+            GestureAction.CURSOR_TO_FIELD_END -> moveCursorToFieldBoundary(toStart = false)
+            GestureAction.GO_HOME -> performSystemGestureAction(GLOBAL_ACTION_HOME, R.string.spoken_home)
+            GestureAction.GO_BACK -> {
+                val done = performSystemGestureAction(GLOBAL_ACTION_BACK, R.string.spoken_back)
+                // P8b: Atrás con el teclado en pantalla lo suele cerrar sin
+                // cambiar de pantalla, así que no llegaría un cambio de
+                // ventana que lo marcara.
+                if (done && keyboardVisible) setKeyboardVisible(false)
+                done
             }
-            GESTURE_SWIPE_UP_AND_RIGHT -> {
-                moveCursorToFieldBoundary(toStart = false)
-                return true
-            }
+            GestureAction.GO_RECENTS -> performSystemGestureAction(GLOBAL_ACTION_RECENTS, R.string.spoken_recents)
         }
+    }
 
-        val (action, spokenRes) = when (gestureId) {
-            GESTURE_SWIPE_UP -> GLOBAL_ACTION_HOME to R.string.spoken_home
-            GESTURE_SWIPE_DOWN_AND_LEFT -> GLOBAL_ACTION_BACK to R.string.spoken_back
-            GESTURE_SWIPE_DOWN_AND_RIGHT -> GLOBAL_ACTION_RECENTS to R.string.spoken_recents
-            else -> return false
-        }
-
-        val done = performGlobalAction(action)
+    /** GO_HOME/GO_BACK/GO_RECENTS: acción global del sistema + aviso hablado si se pudo. */
+    private fun performSystemGestureAction(globalAction: Int, spokenRes: Int): Boolean {
+        val done = performGlobalAction(globalAction)
         if (done && ttsReady) speak(getString(spokenRes))
-        // P8b: Atrás con el teclado en pantalla lo suele cerrar sin cambiar de
-        // pantalla, así que no llegaría un cambio de ventana que lo marcara.
-        if (done && action == GLOBAL_ACTION_BACK && keyboardVisible) setKeyboardVisible(false)
         return done
     }
 

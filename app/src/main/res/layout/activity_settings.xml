@@ -68,6 +68,13 @@
             android:text="@string/settings_section_conversational" />
 
         <Button
+            android:id="@+id/buttonSectionGestures"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="@string/settings_section_gestures" />
+
+        <Button
             android:id="@+id/buttonSectionGeneral"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
