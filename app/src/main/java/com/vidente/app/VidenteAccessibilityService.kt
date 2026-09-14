@@ -1997,28 +1997,6 @@ class VidenteAccessibilityService :
      * de modo se anuncia siempre, así un ciclo accidental se deshace ciclando.
      */
     override fun onGesture(gestureId: Int): Boolean {
-        // DIAGNÓSTICO TEMPORAL (gestos multi-dedo): confirma que la bandera
-        // nueva (flagRequestMultiFingerGestures) realmente hace llegar estos
-        // gestos a onGesture(), antes de sumar las filas completas en
-        // Ajustes. Va primero, antes de cualquier otra cosa, para que suene
-        // pase lo que pase en el resto de la función. Sacar este bloque
-        // entero (y buscar "DIAGNÓSTICO TEMPORAL" para confirmar que no
-        // quedó nada más) una vez confirmado.
-        val multiFingerDiagLabel = when (gestureId) {
-            GESTURE_2_FINGER_SWIPE_LEFT -> "2 dedos, izquierda"
-            GESTURE_2_FINGER_SWIPE_RIGHT -> "2 dedos, derecha"
-            GESTURE_2_FINGER_SWIPE_UP -> "2 dedos, arriba"
-            GESTURE_2_FINGER_SWIPE_DOWN -> "2 dedos, abajo"
-            GESTURE_2_FINGER_SINGLE_TAP -> "2 dedos, un toque"
-            GESTURE_3_FINGER_SWIPE_LEFT -> "3 dedos, izquierda"
-            GESTURE_4_FINGER_SWIPE_LEFT -> "4 dedos, izquierda"
-            else -> null
-        }
-        if (multiFingerDiagLabel != null) {
-            speakSecondary("Diag: $multiFingerDiagLabel")
-            return true
-        }
-
         if (tutorialStep != TutorialStep.NONE) return handleTutorialGesture(gestureId)
 
         // Un gesto cuenta como interacción con la pantalla actual.

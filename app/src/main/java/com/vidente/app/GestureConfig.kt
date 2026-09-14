@@ -51,13 +51,24 @@ object GestureConfig {
     )
 
     /**
-     * Gestos ofrecidos para reasignar. Es a propósito una lista más corta que
-     * todos los gestos que Android define: se incluyen solo los de un dedo
-     * que ya sabemos que el detector del sistema reconoce de forma confiable
-     * en esta app. Quedan afuera los de "reversión en el mismo eje"
-     * (izquierda-y-derecha, derecha-y-izquierda), que en las pruebas no se
-     * reconocieron, y el doble toque y mantener, que Vidente deja pasar a
-     * propósito para poder sostener una tecla del teclado.
+     * Gestos ofrecidos para reasignar.
+     *
+     * De un dedo: es a propósito una lista más corta que todos los que
+     * Android define -- solo los que ya sabemos que el detector del sistema
+     * reconoce de forma confiable en esta app. Quedan afuera los de
+     * "reversión en el mismo eje" (izquierda-y-derecha, derecha-y-izquierda),
+     * que en las pruebas no se reconocieron, y el doble toque y mantener,
+     * que Vidente deja pasar a propósito para poder sostener una tecla del
+     * teclado.
+     *
+     * De 2, 3 y 4 dedos: el conjunto completo que expone
+     * AccessibilityService desde Android 11 (API 30) -- toque, doble toque,
+     * triple toque y deslizar en las 4 direcciones, por cada cantidad de
+     * dedos. Hace falta la bandera flagRequestMultiFingerGestures en
+     * accessibility_service_config.xml (ya agregada) para que estos gestos
+     * lleguen a onGesture(); sin ella, el sistema los ignora en silencio.
+     * No existe una quinta cantidad de dedos en la API pública de Android:
+     * el tope real del sistema es 4.
      */
     val GESTURES = listOf(
         GestureInfo(AccessibilityService.GESTURE_DOUBLE_TAP, R.string.gesture_double_tap),
@@ -70,7 +81,31 @@ object GestureConfig {
         GestureInfo(AccessibilityService.GESTURE_SWIPE_DOWN_AND_LEFT, R.string.gesture_swipe_down_and_left),
         GestureInfo(AccessibilityService.GESTURE_SWIPE_DOWN_AND_RIGHT, R.string.gesture_swipe_down_and_right),
         GestureInfo(AccessibilityService.GESTURE_SWIPE_UP_AND_LEFT, R.string.gesture_swipe_up_and_left),
-        GestureInfo(AccessibilityService.GESTURE_SWIPE_UP_AND_RIGHT, R.string.gesture_swipe_up_and_right)
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_UP_AND_RIGHT, R.string.gesture_swipe_up_and_right),
+
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_SINGLE_TAP, R.string.gesture_2_finger_single_tap),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_DOUBLE_TAP, R.string.gesture_2_finger_double_tap),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_TRIPLE_TAP, R.string.gesture_2_finger_triple_tap),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_SWIPE_UP, R.string.gesture_2_finger_swipe_up),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_SWIPE_DOWN, R.string.gesture_2_finger_swipe_down),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_SWIPE_LEFT, R.string.gesture_2_finger_swipe_left),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_SWIPE_RIGHT, R.string.gesture_2_finger_swipe_right),
+
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_SINGLE_TAP, R.string.gesture_3_finger_single_tap),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_DOUBLE_TAP, R.string.gesture_3_finger_double_tap),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_TRIPLE_TAP, R.string.gesture_3_finger_triple_tap),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_SWIPE_UP, R.string.gesture_3_finger_swipe_up),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_SWIPE_DOWN, R.string.gesture_3_finger_swipe_down),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_SWIPE_LEFT, R.string.gesture_3_finger_swipe_left),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_SWIPE_RIGHT, R.string.gesture_3_finger_swipe_right),
+
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_SINGLE_TAP, R.string.gesture_4_finger_single_tap),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_DOUBLE_TAP, R.string.gesture_4_finger_double_tap),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_TRIPLE_TAP, R.string.gesture_4_finger_triple_tap),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_SWIPE_UP, R.string.gesture_4_finger_swipe_up),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_SWIPE_DOWN, R.string.gesture_4_finger_swipe_down),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_SWIPE_LEFT, R.string.gesture_4_finger_swipe_left),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_SWIPE_RIGHT, R.string.gesture_4_finger_swipe_right)
     )
 
     /** El reparto de siempre: lo que Vidente usó desde antes de que esto fuera configurable. */
