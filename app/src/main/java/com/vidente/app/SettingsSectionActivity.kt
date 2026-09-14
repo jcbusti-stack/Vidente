@@ -615,13 +615,18 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
     // ---- Gestos ----
 
     /**
-     * Una fila por acción (etiqueta + Spinner con los gestos disponibles),
-     * armadas a partir de GestureConfig.ACTIONS en vez de estar escritas en
+     * Una fila por GESTO (etiqueta + Spinner con las acciones disponibles),
+     * armadas a partir de GestureConfig.GESTURES en vez de estar escritas en
      * el XML: así la pantalla no puede quedar desincronizada de la lista real
-     * de acciones si en el futuro se agrega o saca alguna.
+     * de gestos si en el futuro se agrega o saca alguno.
      *
-     * Se usa Spinner (y no casillas ni RadioGroup) porque cada acción elige
-     * entre una lista larga -- 11 gestos más "Sin gesto asignado".
+     * Al estilo del lector chino TalkMan/Jieshuo: cada gesto es la fila, y se
+     * elige qué acción dispara. Varios gestos pueden compartir la misma
+     * acción sin problema; lo único que no puede pasar (que un gesto dispare
+     * dos acciones) ya es imposible porque cada gesto es una sola fila.
+     *
+     * Se usa Spinner (y no casillas ni RadioGroup) porque cada gesto elige
+     * entre una lista larga -- 11 acciones más "Sin acción asignada".
      */
     private fun setUpGesturesSection() {
         renderGestureRows()
@@ -644,61 +649,63 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
         val container = findViewById<LinearLayout>(R.id.containerGestures) ?: return
         container.removeAllViews()
 
-        // "Sin gesto asignado" va primero: es la opción que deja la acción
-        // sin disparador, y también lo que se muestra si otra acción le robó
-        // el gesto.
-        val gestureLabels = listOf(getString(R.string.gesture_none)) +
-            GestureConfig.GESTURES.map { getString(it.labelRes) }
-        val gestureIds: List<Int?> = listOf(null) + GestureConfig.GESTURES.map { it.id }
+        // "Sin acción asignada" va primero: es la opción que deja ese gesto
+        // sin disparar nada.
+        val actionLabels = listOf(getString(R.string.gesture_action_none)) +
+            GestureConfig.ACTIONS.map { getString(it.labelRes) }
+        val actionNames: List<String?> = listOf(null) + GestureConfig.ACTIONS.map { it.name }
 
-        GestureConfig.ACTIONS.forEach { action ->
-            val actionLabel = getString(action.labelRes)
+        val map = currentGestureMap()
+
+        GestureConfig.GESTURES.forEach { gesture ->
+            val gestureLabel = getString(gesture.labelRes)
 
             val label = TextView(this).apply {
-                text = actionLabel
+                text = gestureLabel
                 textSize = 16f
                 // Visible para quien ve la pantalla, pero fuera del árbol de
-                // accesibilidad: el nombre de la acción ya va en la
-                // descripción del Spinner de abajo, y si no habría que pasar
-                // por dos elementos que dicen casi lo mismo.
+                // accesibilidad: el nombre del gesto ya va en la descripción
+                // del Spinner de abajo, y si no habría que pasar por dos
+                // elementos que dicen casi lo mismo.
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }
             container.addView(label)
 
-            val current = GestureConfig.gestureForAction(currentGestureMap(), action.name)
-            val currentIndex = gestureIds.indexOf(current).coerceAtLeast(0)
+            val currentIndex = actionNames.indexOf(map[gesture.id]).coerceAtLeast(0)
 
             val spinner = Spinner(this).apply {
-                // El anuncio dice la acción Y el gesto que tiene asignado
-                // ("Repetir la última frase, deslizar arriba y volver
-                // abajo"): poner solo el nombre de la acción dejaba al
-                // usuario sin saber cuál era el gesto actual, porque una
-                // descripción en el Spinner tapa el texto de su contenido.
+                // El anuncio dice el gesto Y la acción que tiene asignada
+                // ("Deslizar arriba y volver abajo, repetir la última
+                // frase"): poner solo el nombre del gesto dejaba al usuario
+                // sin saber qué acción disparaba, porque una descripción en
+                // el Spinner tapa el texto de su contenido.
                 contentDescription = getString(
                     R.string.settings_gesture_row_description,
-                    actionLabel,
-                    gestureLabels[currentIndex]
+                    gestureLabel,
+                    actionLabels[currentIndex]
                 )
-                adapter = plainSpinnerAdapter(gestureLabels)
+                adapter = plainSpinnerAdapter(actionLabels)
                 setSelection(currentIndex)
                 onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                     override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                        val chosen = gestureIds.getOrNull(position)
+                        val chosen = actionNames.getOrNull(position)
                         val saved = currentGestureMap()
                         // El propio setSelection de arriba dispara este
                         // callback: sin esta comparación, abrir la pantalla
-                        // reescribiría el mapa (y podría reordenarlo) sin que
-                        // el usuario haya tocado nada.
-                        if (chosen == GestureConfig.gestureForAction(saved, action.name)) return
-                        val updated = GestureConfig.withAssignment(saved, action.name, chosen)
+                        // reescribiría el mapa sin que el usuario haya
+                        // tocado nada.
+                        if (chosen == saved[gesture.id]) return
+                        val updated = GestureConfig.withGestureAssignment(saved, gesture.id, chosen)
                         VidentePreferences.setGestureActionMap(this@SettingsSectionActivity, updated)
-                        // Otra acción pudo quedar sin gesto al cedérselo a
-                        // esta: se redibuja todo para que cada Spinner muestre
-                        // el estado real. Diferido con post: este callback
-                        // viene del propio Spinner que se va a eliminar al
-                        // redibujar, y no conviene tocar la jerarquía de
-                        // vistas mientras responde.
-                        container.post { renderGestureRows() }
+                        // Cada gesto es su propia fila: asignarle una acción
+                        // nunca le cambia el gesto a ninguna otra fila, así
+                        // que alcanza con actualizar la descripción de esta
+                        // misma, sin redibujar toda la pantalla.
+                        contentDescription = getString(
+                            R.string.settings_gesture_row_description,
+                            gestureLabel,
+                            actionLabels[position]
+                        )
                     }
 
                     override fun onNothingSelected(parent: AdapterView<*>) {}

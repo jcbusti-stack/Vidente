@@ -84,18 +84,16 @@ object GestureConfig {
         AccessibilityService.GESTURE_SWIPE_UP_AND_RIGHT to ACTION_CURSOR_TO_FIELD_END
     )
 
-    /** Gesto asignado hoy a una acción, o null si quedó sin asignar. */
-    fun gestureForAction(map: Map<Int, String>, actionName: String): Int? =
-        map.entries.firstOrNull { it.value == actionName }?.key
-
     /**
-     * Asigna [gestureId] a [actionName]. Si ese gesto ya disparaba otra
-     * acción, esa otra queda sin asignar: un mismo gesto no puede disparar
-     * dos cosas a la vez. Con gestureId null, la acción queda sin asignar.
+     * Asigna [actionName] al gesto [gestureId], sin tocar ninguna otra fila:
+     * varios gestos pueden disparar la misma acción sin problema (lo único
+     * que no puede pasar -- que un gesto dispare dos acciones a la vez -- ya
+     * es imposible porque cada gesto es una sola entrada del mapa). Con
+     * actionName null, ese gesto queda sin acción asignada.
      */
-    fun withAssignment(map: Map<Int, String>, actionName: String, gestureId: Int?): Map<Int, String> {
-        val result = map.filterValues { it != actionName }.toMutableMap()
-        if (gestureId != null) result[gestureId] = actionName
+    fun withGestureAssignment(map: Map<Int, String>, gestureId: Int, actionName: String?): Map<Int, String> {
+        val result = map.toMutableMap()
+        if (actionName != null) result[gestureId] = actionName else result.remove(gestureId)
         return result
     }
 }
