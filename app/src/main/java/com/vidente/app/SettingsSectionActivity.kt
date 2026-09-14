@@ -162,6 +162,26 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
             setDropDownViewResource(android.R.layout.simple_list_item_1)
         }
 
+    /**
+     * Como plainSpinnerAdapter, pero antepone [prefix] (el nombre del gesto)
+     * al texto que se ve con el Spinner CERRADO -- "Deslizar a la derecha:
+     * Ir al siguiente elemento" -- para no necesitar una etiqueta aparte al
+     * lado (ver el comentario en renderGestureRows). Solo se toca getView()
+     * (la vista cerrada, que Android arma con el ítem seleccionado); la
+     * lista desplegada sigue mostrando las acciones solas, sin repetir el
+     * nombre del gesto en cada opción.
+     */
+    private fun gestureActionSpinnerAdapter(prefix: String, labels: List<String>): ArrayAdapter<String> =
+        object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, labels) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val view = super.getView(position, convertView, parent)
+                (view as? TextView)?.text = getString(R.string.settings_gesture_row_description, prefix, labels[position])
+                return view
+            }
+        }.apply {
+            setDropDownViewResource(android.R.layout.simple_list_item_1)
+        }
+
     /** Etiquetas y paquetes de los motores de TTS instalados, con "Predeterminado del sistema" primero. */
     private fun engineLabelsAndPackages(engine: TextToSpeech): Pair<List<String>, List<String?>> {
         val labels = mutableListOf(getString(R.string.settings_engine_system_default))
@@ -676,32 +696,27 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
 
         GestureConfig.GESTURES.forEach { gesture ->
             val gestureLabel = getString(gesture.labelRes)
-
-            val label = TextView(this).apply {
-                text = gestureLabel
-                textSize = 16f
-                // Visible para quien ve la pantalla, pero fuera del árbol de
-                // accesibilidad: el nombre del gesto ya va en la descripción
-                // del Spinner de abajo, y si no habría que pasar por dos
-                // elementos que dicen casi lo mismo.
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }
-            container.addView(label)
-
             val currentIndex = actionNames.indexOf(map[gesture.id]).coerceAtLeast(0)
 
             val spinner = Spinner(this).apply {
-                // El anuncio dice el gesto Y la acción que tiene asignada
-                // ("Deslizar arriba y volver abajo, repetir la última
-                // frase"): poner solo el nombre del gesto dejaba al usuario
-                // sin saber qué acción disparaba, porque una descripción en
-                // el Spinner tapa el texto de su contenido.
+                // Antes había una etiqueta aparte con el nombre del gesto,
+                // oculta del árbol de accesibilidad (importantForAccessibility
+                // = NO) al lado del Spinner. Un toque a veces igual aterrizaba
+                // en esa etiqueta oculta en vez de en el Spinner: como no es
+                // uno de los hijos que el padre expone por accesibilidad, el
+                // recorrido de deslizar no lograba ubicarla entre sus
+                // hermanos y se iba al principio/fin de la pantalla -- la
+                // causa real del "toque y desliza" en esta pantalla. Ahora no
+                // hay ningún elemento oculto compitiendo por el toque: el
+                // propio Spinner, cerrado, ya muestra "gesto: acción"
+                // (gestureActionSpinnerAdapter), y es el único elemento de
+                // toda la fila.
                 contentDescription = getString(
                     R.string.settings_gesture_row_description,
                     gestureLabel,
                     actionLabels[currentIndex]
                 )
-                adapter = plainSpinnerAdapter(actionLabels)
+                adapter = gestureActionSpinnerAdapter(gestureLabel, actionLabels)
                 setSelection(currentIndex)
                 onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                     override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {

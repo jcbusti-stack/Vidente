@@ -88,6 +88,7 @@
     <string name="spoken_state_off">desactivado</string>
     <string name="spoken_state_checked">marcada</string>
     <string name="spoken_state_unchecked">sin marcar</string>
+    <string name="spoken_state_selected">seleccionado</string>
     <string name="spoken_state_disabled">no disponible</string>
 
     <string name="spoken_screen_start">Principio de la pantalla</string>

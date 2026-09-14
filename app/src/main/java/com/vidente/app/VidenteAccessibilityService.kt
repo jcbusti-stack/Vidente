@@ -1649,15 +1649,17 @@ class VidenteAccessibilityService :
             )
         }
 
-        // "isSelected" NO se anuncia a propósito (a diferencia de isChecked):
-        // Android lo marca solo, sin que Vidente ni la app lo pidan, en la
-        // fila resaltada de una lista de una sola elección (ListView en modo
-        // CHOICE_MODE_SINGLE) -- exactamente lo que arma por dentro el
-        // desplegable abierto de un Spinner. El resultado era "seleccionado"
-        // en TODAS las opciones al abrir un desplegable (Idioma, Voz), justo
-        // el ruido genérico que el ajuste de build 111 quería sacar y que
-        // esta otra fuente -- distinta de la de RadioButton/CheckBox de
-        // arriba -- se había quedado afuera.
+        // Revertido (build 115 se pasó de la raya): sacar "seleccionado" de
+        // TODAS las opciones también se lo sacó a la única que sí debía
+        // tenerlo. isSelected es el mecanismo estándar y documentado de
+        // Android para "esta es la opción actual dentro de una lista de una
+        // sola elección" (ListView en modo CHOICE_MODE_SINGLE marca
+        // exactamente UNA fila, no todas): el "seleccionado" en todas partes
+        // que se reportó antes ya había quedado resuelto por el cambio de
+        // build 111 (CheckedTextView -> TextView plano en los Spinner);
+        // sacar esto además fue una corrección de más sobre una causa ya
+        // arreglada, no una causa nueva.
+        if (node.isSelected) states.add(getString(R.string.spoken_state_selected))
         if (!node.isEnabled) states.add(getString(R.string.spoken_state_disabled))
 
         return states

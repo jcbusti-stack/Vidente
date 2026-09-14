@@ -82,6 +82,7 @@
     <string name="spoken_state_off">off</string>
     <string name="spoken_state_checked">checked</string>
     <string name="spoken_state_unchecked">not checked</string>
+    <string name="spoken_state_selected">selected</string>
     <string name="spoken_state_disabled">not available</string>
 
     <string name="spoken_screen_start">Start of screen</string>
