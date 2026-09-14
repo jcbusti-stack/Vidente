@@ -877,7 +877,11 @@ class VidenteAccessibilityService :
             // gesto, pero el sistema lo convierte en un click: lo usamos como
             // señal de que el usuario practicó el paso de "activar".
             AccessibilityEvent.TYPE_VIEW_CLICKED ->
-                if (tutorialStep == TutorialStep.DOUBLE_TAP) onDoubleTapPracticed()
+                if (tutorialStep == TutorialStep.DOUBLE_TAP) {
+                    onDoubleTapPracticed()
+                } else if (tutorialStep == TutorialStep.NONE) {
+                    announceToggledState(event)
+                }
 
             // Pantalla o diálogo nuevo: se reinicia el estado dependiente de la
             // pantalla y se anuncia el título (P8a) o el contenido del diálogo
@@ -1627,6 +1631,44 @@ class VidenteAccessibilityService :
         if (!node.isEnabled) states.add(getString(R.string.spoken_state_disabled))
 
         return states
+    }
+
+    /**
+     * Al activar una casilla (o cualquier control marcable) se anuncia su
+     * estado NUEVO: "marcada" / "sin marcar". Sin esto, tras el doble toque
+     * Vidente se quedaba callado y había que salir del control y volver a
+     * entrar para saber si había quedado activado o no.
+     *
+     * Se dice solo el estado, sin repetir el nombre: el usuario acaba de oír
+     * el nombre al pararse en el control, y repetirlo entero en cada toque
+     * haría lento algo que se usa seguido.
+     *
+     * El nodo se refresca antes de leerlo porque el evento de clic puede
+     * llegar con la copia anterior del nodo (el estado todavía sin cambiar);
+     * si el refresco falla se usa lo que traiga el propio evento.
+     */
+    private fun announceToggledState(event: AccessibilityEvent) {
+        val node = event.source ?: return
+        try {
+            val refreshed = try { node.refresh() } catch (e: Exception) { false }
+            if (!node.isCheckable) return
+            val checked = if (refreshed) node.isChecked else event.isChecked
+            val className = node.className?.toString().orEmpty()
+            // Un interruptor dice "activado"/"desactivado"; una casilla o una
+            // opción, "marcada"/"sin marcar" (la regla de Ajustes de Vidente).
+            val isSwitch = className.endsWith("Switch") ||
+                className.endsWith("SwitchCompat") ||
+                className.endsWith("SwitchMaterial") ||
+                className.endsWith("ToggleButton")
+            val stateRes = if (isSwitch) {
+                if (checked) R.string.spoken_state_on else R.string.spoken_state_off
+            } else {
+                if (checked) R.string.spoken_state_checked else R.string.spoken_state_unchecked
+            }
+            speak(getString(stateRes))
+        } finally {
+            node.recycle()
+        }
     }
 
     /**
