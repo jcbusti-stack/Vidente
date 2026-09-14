@@ -610,6 +610,9 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
                 VidentePreferences.setScrollFeedback(this@SettingsSectionActivity, it)
             }
         }
+        setUpBooleanCheckbox(R.id.checkboxProximityMute, VidentePreferences.getProximityMute(this)) {
+            VidentePreferences.setProximityMute(this, it)
+        }
     }
 
     // ---- Tutorial ----
@@ -798,6 +801,7 @@ class SettingsSectionActivity : AppCompatActivity(), TextToSpeech.OnInitListener
             this,
             VidentePreferences.DEFAULT_ANNOUNCE_KEYBOARD_EXPLORATION
         )
+        VidentePreferences.setProximityMute(this, VidentePreferences.DEFAULT_PROXIMITY_MUTE)
         VidentePreferences.setGestureActionMap(this, GestureConfig.DEFAULT_MAP)
         Toast.makeText(this, R.string.settings_reset_done, Toast.LENGTH_SHORT).show()
     }

@@ -65,6 +65,8 @@
     <string name="gesture_action_cursor_to_field_start">Cursor to the start of the field</string>
     <string name="gesture_action_cursor_to_field_end">Cursor to the end of the field</string>
     <string name="gesture_action_cycle_tts_engine">Switch voice engine</string>
+    <string name="gesture_action_go_notifications">Open notifications</string>
+    <string name="spoken_notifications_panel">Notifications</string>
     <string name="settings_language_label">Language</string>
     <string name="settings_language_system">Follow the phone\'s language</string>
 
@@ -106,6 +108,7 @@
     <string name="spoken_chars_count">%1$d characters</string>
 
     <string name="spoken_scroll_item">item %1$d of %2$d</string>
+    <string name="spoken_home_screen_page">Page %1$d of %2$d</string>
     <string name="spoken_scroll_percent">%1$d percent</string>
 
     <string name="spoken_no_type_on_screen">No %1$s on screen</string>
@@ -198,6 +201,7 @@
     <string name="settings_scroll_feedback_label">Position feedback when scrolling</string>
     <string name="settings_scroll_feedback_tone">Sound (low to high tone)</string>
     <string name="settings_scroll_feedback_voice">Voice (percentage)</string>
+    <string name="settings_proximity_mute_label">Mute when covering the proximity sensor</string>
     <string name="settings_typing_echo_label">Typing echo</string>
     <string name="settings_typing_echo_chars_words">Characters and words</string>
     <string name="settings_typing_echo_chars">Characters only</string>

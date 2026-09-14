@@ -11,6 +11,10 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.PixelFormat
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.SoundPool
@@ -168,7 +172,8 @@ class VidenteAccessibilityService :
         GO_RECENTS,
         CURSOR_TO_FIELD_START,
         CURSOR_TO_FIELD_END,
-        CYCLE_TTS_ENGINE
+        CYCLE_TTS_ENGINE,
+        GO_NOTIFICATIONS
     }
 
     // Los valores por defecto viven en GestureConfig, compartidos con la
@@ -289,6 +294,12 @@ class VidenteAccessibilityService :
     private var keyboardVisible = false
     private val imePackages = mutableSetOf<String>()
 
+    // Paquete del lanzador de inicio actual, para el aviso de "Página X de
+    // Y" al cambiar de página en Inicio (ver handleScrolled). Se resuelve
+    // con la API pública de Android (Intent.CATEGORY_HOME), no asumiendo
+    // ningún lanzador puntual, y se cachea porque no cambia seguido.
+    private var launcherPackageName: String? = null
+
     // P8c parte 2: eco de escritura. Qué se dice al teclear en un campo de
     // texto (nada / caracteres / palabras / ambos). Configurable en Ajustes.
     private var typingEcho = VidentePreferences.DEFAULT_TYPING_ECHO
@@ -305,6 +316,7 @@ class VidenteAccessibilityService :
     private var announceUppercase = true
     private var announceSpellingExample = false
     private var announceKeyboardExploration = true
+    private var proximityMuteEnabled = true
     private var lastCursorIndex = -1
     // Identifica el campo al que corresponde lastCursorIndex (id de vista, o
     // el propio texto leído si no tiene id), para no reiniciar la referencia
@@ -706,6 +718,61 @@ class VidenteAccessibilityService :
     }
 
     /**
+     * Silenciar con el sensor de proximidad (ajuste configurable, activado
+     * por defecto): tapar el sensor -- como al acercar el teléfono a la
+     * oreja -- corta lo que se esté diciendo en el momento. Destaparlo NO
+     * retoma nada solo, igual que TalkBack: la próxima lectura suena normal,
+     * sin repetir lo que se cortó.
+     *
+     * Sensor.TYPE_PROXIMITY es la misma API estándar que ya usa el sistema
+     * para apagar la pantalla en una llamada -- disponible en prácticamente
+     * todos los teléfonos. Los sensores de proximidad binarios (la mayoría)
+     * reportan directamente 0 al estar tapados; por las dudas se compara
+     * contra el alcance máximo del sensor en vez de contra 0 fijo, para que
+     * funcione igual en uno que sí reporte distancias intermedias.
+     */
+    private var proximitySensorRegistered = false
+
+    private val proximityListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent) {
+            if (!proximityMuteEnabled) return
+            val covered = event.values.isNotEmpty() && event.values[0] < event.sensor.maximumRange
+            if (!covered) return
+            tts?.stop()
+            ttsSecondary?.stop()
+            pendingHoverSpeakRunnable?.let { mainHandler.removeCallbacks(it) }
+            pendingHoverSpeakRunnable = null
+            // Pausa silenciosa: a diferencia de pauseContinuousReading(), acá
+            // no corresponde decir "Pausa" -- el punto es quedarse callado.
+            if (continuousReading && !continuousPaused) continuousPaused = true
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
+
+    private fun registerProximitySensor() {
+        if (proximitySensorRegistered) return
+        try {
+            val manager = getSystemService(SENSOR_SERVICE) as? SensorManager ?: return
+            val sensor = manager.getDefaultSensor(Sensor.TYPE_PROXIMITY) ?: return
+            manager.registerListener(proximityListener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+            proximitySensorRegistered = true
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo registrar el sensor de proximidad", e)
+        }
+    }
+
+    private fun unregisterProximitySensor() {
+        if (!proximitySensorRegistered) return
+        try {
+            (getSystemService(SENSOR_SERVICE) as? SensorManager)?.unregisterListener(proximityListener)
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo desregistrar el sensor de proximidad", e)
+        }
+        proximitySensorRegistered = false
+    }
+
+    /**
      * P9 tercer aviso puntual: notificación entrante, por la voz secundaria.
      * Solo dice qué app la mandó, nunca el contenido del mensaje (elegido a
      * propósito: un aviso automático e inesperado no es lo mismo que leer la
@@ -799,6 +866,7 @@ class VidenteAccessibilityService :
         Log.i(TAG, "Vidente conectado")
         refreshLocale()
         refreshImePackages()
+        refreshLauncherPackage()
         refreshScrollFeedback()
         gestureActionMap = loadGestureActionMap()
         ensureSoundPool()
@@ -837,6 +905,11 @@ class VidenteAccessibilityService :
             Log.w(TAG, "No se pudo registrar AudioDeviceCallback", e)
         }
 
+        // Igual que arriba: puede reconectar el servicio, así que se
+        // desregistra primero por si ya estaba.
+        unregisterProximitySensor()
+        registerProximitySensor()
+
         // Tutorial de bienvenida la primera vez que se activa el servicio.
         // Se marca como visto al arrancarlo para no repetirlo en cada
         // reconexión; se puede repasar desde Ajustes.
@@ -853,6 +926,16 @@ class VidenteAccessibilityService :
             imm.enabledInputMethodList.forEach { it.packageName?.let(imePackages::add) }
         } catch (e: Exception) {
             Log.w(TAG, "No se pudo listar los teclados instalados", e)
+        }
+    }
+
+    private fun refreshLauncherPackage() {
+        try {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            launcherPackageName =
+                packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo resolver el lanzador de inicio", e)
         }
     }
 
@@ -1017,6 +1100,25 @@ class VidenteAccessibilityService :
         val fromIndex = event.fromIndex
         val toIndex = event.toIndex
         val itemCount = event.itemCount
+
+        // Cambiar de página en Inicio (deslizar con dos dedos, lo maneja el
+        // propio lanzador, Vidente no intercepta ese gesto) usa el mismo
+        // ItemCount/fromIndex que ya expone cualquier paginador por
+        // accesibilidad (el mecanismo público que usa, por ejemplo,
+        // ViewPager para "página X de Y"). Se anuncia SIEMPRE por voz, nunca
+        // por tono -- cambiar de página es un evento puntual, no un scroll
+        // continuo, y un pitido no dice el número -- y no depende de qué
+        // lanzador sea: se detecta por la API pública de Android
+        // (Intent.CATEGORY_HOME), sin asumir nada de un lanzador puntual.
+        if (itemCount > 0 && fromIndex == toIndex && event.packageName?.toString() == launcherPackageName) {
+            val page = getString(R.string.spoken_home_screen_page, fromIndex + 1, itemCount)
+            if (page != lastSpokenScrollPos) {
+                lastSpokenScrollPos = page
+                speak(page)
+            }
+            return
+        }
+
         val scrollY = event.scrollY
         val maxScrollY = event.maxScrollY
         val scrollX = event.scrollX
@@ -1159,6 +1261,7 @@ class VidenteAccessibilityService :
         announceUppercase = VidentePreferences.getAnnounceUppercase(this)
         announceSpellingExample = VidentePreferences.getAnnounceSpellingExample(this)
         announceKeyboardExploration = VidentePreferences.getAnnounceKeyboardExploration(this)
+        proximityMuteEnabled = VidentePreferences.getProximityMute(this)
     }
 
     /**
@@ -1974,6 +2077,8 @@ class VidenteAccessibilityService :
                 done
             }
             GestureAction.GO_RECENTS -> performSystemGestureAction(GLOBAL_ACTION_RECENTS, R.string.spoken_recents)
+            GestureAction.GO_NOTIFICATIONS ->
+                performSystemGestureAction(GLOBAL_ACTION_NOTIFICATIONS, R.string.spoken_notifications_panel)
             GestureAction.CYCLE_TTS_ENGINE -> {
                 cycleTtsEngine()
                 true
@@ -3085,6 +3190,7 @@ class VidenteAccessibilityService :
         } catch (e: Exception) {
             Log.w(TAG, "audioDeviceCallback ya no estaba registrado", e)
         }
+        unregisterProximitySensor()
         VidentePreferences.prefs(this).unregisterOnSharedPreferenceChangeListener(this)
         mainHandler.removeCallbacksAndMessages(null)
         releaseSoundPool()

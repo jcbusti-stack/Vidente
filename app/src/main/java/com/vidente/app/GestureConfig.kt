@@ -26,6 +26,7 @@ object GestureConfig {
     const val ACTION_CURSOR_TO_FIELD_START = "CURSOR_TO_FIELD_START"
     const val ACTION_CURSOR_TO_FIELD_END = "CURSOR_TO_FIELD_END"
     const val ACTION_CYCLE_TTS_ENGINE = "CYCLE_TTS_ENGINE"
+    const val ACTION_GO_NOTIFICATIONS = "GO_NOTIFICATIONS"
 
     /** Una acción que Vidente sabe ejecutar por un gesto, con su nombre visible. */
     data class ActionInfo(val name: String, val labelRes: Int)
@@ -45,7 +46,8 @@ object GestureConfig {
         ActionInfo(ACTION_GO_RECENTS, R.string.gesture_action_go_recents),
         ActionInfo(ACTION_CURSOR_TO_FIELD_START, R.string.gesture_action_cursor_to_field_start),
         ActionInfo(ACTION_CURSOR_TO_FIELD_END, R.string.gesture_action_cursor_to_field_end),
-        ActionInfo(ACTION_CYCLE_TTS_ENGINE, R.string.gesture_action_cycle_tts_engine)
+        ActionInfo(ACTION_CYCLE_TTS_ENGINE, R.string.gesture_action_cycle_tts_engine),
+        ActionInfo(ACTION_GO_NOTIFICATIONS, R.string.gesture_action_go_notifications)
     )
 
     /**

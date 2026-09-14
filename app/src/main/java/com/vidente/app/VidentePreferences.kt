@@ -111,6 +111,11 @@ object VidentePreferences {
     const val KEY_ANNOUNCE_KEYBOARD_EXPLORATION = "announce_keyboard_exploration"
     const val DEFAULT_ANNOUNCE_KEYBOARD_EXPLORATION = true
 
+    // Silenciar con el sensor de proximidad (tapar corta lo que se está
+    // diciendo, como TalkBack). Activado por defecto.
+    const val KEY_PROXIMITY_MUTE = "proximity_mute"
+    const val DEFAULT_PROXIMITY_MUTE = true
+
     // Configuración de gestos (paso 2 de "gestos personalizables"): qué
     // acción dispara cada gesto. Se guarda como texto (JSON de
     // gesto -> nombre de la acción) porque SharedPreferences no admite
@@ -121,7 +126,12 @@ object VidentePreferences {
     const val DEFAULT_RATE = 1.15f
     const val DEFAULT_PITCH = 1.0f
     const val MIN_RATE = 0.5f
-    const val MAX_RATE = 2.5f
+    // Antes 2.5: era un tope que había puesto Vidente mismo, no un límite
+    // real del motor de TTS -- setSpeechRate() no tiene techo documentado.
+    // Se sube para dejar probar qué tan rápido se banca de verdad el motor
+    // instalado, sin meterse con nada más complejo (acelerar el audio ya
+    // generado) a menos que esto no alcance.
+    const val MAX_RATE = 4.0f
     const val MIN_PITCH = 0.5f
     const val MAX_PITCH = 2.0f
 
@@ -339,6 +349,13 @@ object VidentePreferences {
 
     fun setAnnounceKeyboardExploration(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_ANNOUNCE_KEYBOARD_EXPLORATION, enabled).apply()
+    }
+
+    fun getProximityMute(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PROXIMITY_MUTE, DEFAULT_PROXIMITY_MUTE)
+
+    fun setProximityMute(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PROXIMITY_MUTE, enabled).apply()
     }
 
     /**
