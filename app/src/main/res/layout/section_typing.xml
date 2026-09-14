@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="@string/settings_typing_echo_label"
+        android:textSize="16sp" />
+
+    <RadioGroup
+        android:id="@+id/radioGroupTypingEcho"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioTypingEchoCharsWords"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_typing_echo_chars_words" />
+
+        <RadioButton
+            android:id="@+id/radioTypingEchoChars"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_typing_echo_chars" />
+
+        <RadioButton
+            android:id="@+id/radioTypingEchoWords"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_typing_echo_words" />
+
+        <RadioButton
+            android:id="@+id/radioTypingEchoNone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_typing_echo_none" />
+    </RadioGroup>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="@string/settings_keyboard_write_mode_label"
+        android:textSize="16sp" />
+
+    <RadioGroup
+        android:id="@+id/radioGroupKeyboardWriteMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioKeyboardWriteModeDoubleTap"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_keyboard_write_mode_double_tap" />
+
+        <RadioButton
+            android:id="@+id/radioKeyboardWriteModeSlideRelease"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_keyboard_write_mode_slide_release" />
+    </RadioGroup>
+
+    <CheckBox
+        android:id="@+id/checkboxCursorAnnounce"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_cursor_announce_label" />
+
+    <CheckBox
+        android:id="@+id/checkboxAnnounceUppercase"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_uppercase_label" />
+
+    <CheckBox
+        android:id="@+id/checkboxAnnounceSpellingExample"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_spelling_example_label" />
+
+    <CheckBox
+        android:id="@+id/checkboxAnnounceKeyboardExploration"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_announce_keyboard_exploration_label" />
+
+</LinearLayout>

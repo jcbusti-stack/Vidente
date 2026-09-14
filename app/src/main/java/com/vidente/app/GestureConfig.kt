@@ -1,0 +1,138 @@
+package com.vidente.app
+
+import android.accessibilityservice.AccessibilityService
+
+/**
+ * Configuración de gestos: única fuente de verdad, compartida entre el
+ * servicio (que ejecuta las acciones) y Ajustes (que las muestra para
+ * reasignarlas). Así las dos listas no pueden quedar desincronizadas.
+ *
+ * Los nombres de acción son texto y coinciden con los del enum GestureAction
+ * del servicio: eso es lo que se guarda en preferencias (ver
+ * VidentePreferences.getGestureActionMap), para que el archivo guardado siga
+ * siendo legible y no dependa de números internos.
+ */
+object GestureConfig {
+
+    const val ACTION_ACTIVATE = "ACTIVATE"
+    const val ACTION_NEXT = "NEXT"
+    const val ACTION_PREVIOUS = "PREVIOUS"
+    const val ACTION_CYCLE_NAV_MODE = "CYCLE_NAV_MODE"
+    const val ACTION_START_CONTINUOUS_READING = "START_CONTINUOUS_READING"
+    const val ACTION_REPEAT_LAST_PHRASE = "REPEAT_LAST_PHRASE"
+    const val ACTION_GO_HOME = "GO_HOME"
+    const val ACTION_GO_BACK = "GO_BACK"
+    const val ACTION_GO_RECENTS = "GO_RECENTS"
+    const val ACTION_CURSOR_TO_FIELD_START = "CURSOR_TO_FIELD_START"
+    const val ACTION_CURSOR_TO_FIELD_END = "CURSOR_TO_FIELD_END"
+    const val ACTION_CYCLE_TTS_ENGINE = "CYCLE_TTS_ENGINE"
+    const val ACTION_GO_NOTIFICATIONS = "GO_NOTIFICATIONS"
+
+    /** Una acción que Vidente sabe ejecutar por un gesto, con su nombre visible. */
+    data class ActionInfo(val name: String, val labelRes: Int)
+
+    /** Un gesto de un dedo que Android sabe reconocer, con su nombre visible. */
+    data class GestureInfo(val id: Int, val labelRes: Int)
+
+    val ACTIONS = listOf(
+        ActionInfo(ACTION_ACTIVATE, R.string.gesture_action_activate),
+        ActionInfo(ACTION_NEXT, R.string.gesture_action_next),
+        ActionInfo(ACTION_PREVIOUS, R.string.gesture_action_previous),
+        ActionInfo(ACTION_CYCLE_NAV_MODE, R.string.gesture_action_cycle_nav_mode),
+        ActionInfo(ACTION_START_CONTINUOUS_READING, R.string.gesture_action_start_continuous_reading),
+        ActionInfo(ACTION_REPEAT_LAST_PHRASE, R.string.gesture_action_repeat_last_phrase),
+        ActionInfo(ACTION_GO_HOME, R.string.gesture_action_go_home),
+        ActionInfo(ACTION_GO_BACK, R.string.gesture_action_go_back),
+        ActionInfo(ACTION_GO_RECENTS, R.string.gesture_action_go_recents),
+        ActionInfo(ACTION_CURSOR_TO_FIELD_START, R.string.gesture_action_cursor_to_field_start),
+        ActionInfo(ACTION_CURSOR_TO_FIELD_END, R.string.gesture_action_cursor_to_field_end),
+        ActionInfo(ACTION_CYCLE_TTS_ENGINE, R.string.gesture_action_cycle_tts_engine),
+        ActionInfo(ACTION_GO_NOTIFICATIONS, R.string.gesture_action_go_notifications)
+    )
+
+    /**
+     * Gestos ofrecidos para reasignar.
+     *
+     * De un dedo: es a propósito una lista más corta que todos los que
+     * Android define -- solo los que ya sabemos que el detector del sistema
+     * reconoce de forma confiable en esta app. Quedan afuera los de
+     * "reversión en el mismo eje" (izquierda-y-derecha, derecha-y-izquierda),
+     * que en las pruebas no se reconocieron, y el doble toque y mantener,
+     * que Vidente deja pasar a propósito para poder sostener una tecla del
+     * teclado.
+     *
+     * De 2, 3 y 4 dedos: el conjunto completo que expone
+     * AccessibilityService desde Android 11 (API 30) -- toque, doble toque,
+     * triple toque y deslizar en las 4 direcciones, por cada cantidad de
+     * dedos. Hace falta la bandera flagRequestMultiFingerGestures en
+     * accessibility_service_config.xml (ya agregada) para que estos gestos
+     * lleguen a onGesture(); sin ella, el sistema los ignora en silencio.
+     * No existe una quinta cantidad de dedos en la API pública de Android:
+     * el tope real del sistema es 4.
+     */
+    val GESTURES = listOf(
+        GestureInfo(AccessibilityService.GESTURE_DOUBLE_TAP, R.string.gesture_double_tap),
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_RIGHT, R.string.gesture_swipe_right),
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_LEFT, R.string.gesture_swipe_left),
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_UP, R.string.gesture_swipe_up),
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_DOWN, R.string.gesture_swipe_down),
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_DOWN_AND_UP, R.string.gesture_swipe_down_and_up),
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_UP_AND_DOWN, R.string.gesture_swipe_up_and_down),
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_DOWN_AND_LEFT, R.string.gesture_swipe_down_and_left),
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_DOWN_AND_RIGHT, R.string.gesture_swipe_down_and_right),
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_UP_AND_LEFT, R.string.gesture_swipe_up_and_left),
+        GestureInfo(AccessibilityService.GESTURE_SWIPE_UP_AND_RIGHT, R.string.gesture_swipe_up_and_right),
+
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_SINGLE_TAP, R.string.gesture_2_finger_single_tap),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_DOUBLE_TAP, R.string.gesture_2_finger_double_tap),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_TRIPLE_TAP, R.string.gesture_2_finger_triple_tap),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_SWIPE_UP, R.string.gesture_2_finger_swipe_up),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_SWIPE_DOWN, R.string.gesture_2_finger_swipe_down),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_SWIPE_LEFT, R.string.gesture_2_finger_swipe_left),
+        GestureInfo(AccessibilityService.GESTURE_2_FINGER_SWIPE_RIGHT, R.string.gesture_2_finger_swipe_right),
+
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_SINGLE_TAP, R.string.gesture_3_finger_single_tap),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_DOUBLE_TAP, R.string.gesture_3_finger_double_tap),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_TRIPLE_TAP, R.string.gesture_3_finger_triple_tap),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_SWIPE_UP, R.string.gesture_3_finger_swipe_up),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_SWIPE_DOWN, R.string.gesture_3_finger_swipe_down),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_SWIPE_LEFT, R.string.gesture_3_finger_swipe_left),
+        GestureInfo(AccessibilityService.GESTURE_3_FINGER_SWIPE_RIGHT, R.string.gesture_3_finger_swipe_right),
+
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_SINGLE_TAP, R.string.gesture_4_finger_single_tap),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_DOUBLE_TAP, R.string.gesture_4_finger_double_tap),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_TRIPLE_TAP, R.string.gesture_4_finger_triple_tap),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_SWIPE_UP, R.string.gesture_4_finger_swipe_up),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_SWIPE_DOWN, R.string.gesture_4_finger_swipe_down),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_SWIPE_LEFT, R.string.gesture_4_finger_swipe_left),
+        GestureInfo(AccessibilityService.GESTURE_4_FINGER_SWIPE_RIGHT, R.string.gesture_4_finger_swipe_right)
+    )
+
+    /** El reparto de siempre: lo que Vidente usó desde antes de que esto fuera configurable. */
+    val DEFAULT_MAP: Map<Int, String> = mapOf(
+        AccessibilityService.GESTURE_DOUBLE_TAP to ACTION_ACTIVATE,
+        AccessibilityService.GESTURE_SWIPE_RIGHT to ACTION_NEXT,
+        AccessibilityService.GESTURE_SWIPE_LEFT to ACTION_PREVIOUS,
+        AccessibilityService.GESTURE_SWIPE_DOWN to ACTION_CYCLE_NAV_MODE,
+        AccessibilityService.GESTURE_SWIPE_DOWN_AND_UP to ACTION_START_CONTINUOUS_READING,
+        AccessibilityService.GESTURE_SWIPE_UP_AND_DOWN to ACTION_REPEAT_LAST_PHRASE,
+        AccessibilityService.GESTURE_SWIPE_UP to ACTION_GO_HOME,
+        AccessibilityService.GESTURE_SWIPE_DOWN_AND_LEFT to ACTION_GO_BACK,
+        AccessibilityService.GESTURE_SWIPE_DOWN_AND_RIGHT to ACTION_GO_RECENTS,
+        AccessibilityService.GESTURE_SWIPE_UP_AND_LEFT to ACTION_CURSOR_TO_FIELD_START,
+        AccessibilityService.GESTURE_SWIPE_UP_AND_RIGHT to ACTION_CURSOR_TO_FIELD_END
+    )
+
+    /**
+     * Asigna [actionName] al gesto [gestureId], sin tocar ninguna otra fila:
+     * varios gestos pueden disparar la misma acción sin problema (lo único
+     * que no puede pasar -- que un gesto dispare dos acciones a la vez -- ya
+     * es imposible porque cada gesto es una sola entrada del mapa). Con
+     * actionName null, ese gesto queda sin acción asignada.
+     */
+    fun withGestureAssignment(map: Map<Int, String>, gestureId: Int, actionName: String?): Map<Int, String> {
+        val result = map.toMutableMap()
+        if (actionName != null) result[gestureId] = actionName else result.remove(gestureId)
+        return result
+    }
+}
